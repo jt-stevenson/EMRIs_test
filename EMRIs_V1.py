@@ -1,4 +1,5 @@
 import binary_formation_distribution_V8 as myscript
+import NT_disk_Eqns_V1 as jscript
 
 import matplotlib.pyplot as plt
 import pagn.constants as ct
@@ -88,13 +89,23 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
     # ispiral happens within disk's lifetime
     emri_within_T = min(t_migr, t_gw) < T
 
-
     # for EMRIs this is not a binary quantity but depends only on SMBH spin (assumed random)
-    chi_eff = 2 * np.random.rand() - 1  # in [-1, 1]
+    spin=np.random.rand()
+    # future task - add SMBH spin distribution to draw from?
+    chi_eff = 2 * spin - 1  # in [-1, 1]
 
     # final flag
     is_emri = emri_flag and emri_within_T
 
+    # code frankesteined in by Jupiter
+
+    R_isco=jscript.R_isco_function(MBH, spin)
+
+    if is_emri is True:
+        Lisa_flag, Lisa_radii=jscript.LISAband_flag(r0, R_isco, MBH, m, print = True)
+        # print(Lisa_radii)
+
+    
     #assume zero eccentricity
     return f"{np.log10(Mbh/ct.MSun):.1f} {m1/ct.MSun:.3e} {r0/Rs:.3e} {chi_eff:.3e} {T/(1e6*ct.yr):.3e} {t_gw/(1e6*ct.yr):.3e} {t_migr/(1e6*ct.yr):.3e} {is_emri} {Ng}\n"
 
