@@ -123,9 +123,9 @@ def main():
 ################################################################################################
 if __name__ == '__main__':
     args=main()
-    mass_sec=np.genfromtxt("src/BHs_single_Zsun_rapid_nospin.dat",usecols=(0),skip_header=3,unpack=True)
-    mass_prim_vk = np.genfromtxt('src/Ng_catalog.txt', skip_header=1)
-    MBH, T = np.genfromtxt("src/SMBHmass_local_AGNlifetime_pairs.txt", unpack=True, skip_header=3)
+    mass_sec=np.genfromtxt("BHs_single_Zsun_rapid_nospin.dat",usecols=(0),skip_header=3,unpack=True)
+    mass_prim_vk = np.genfromtxt('Ng_catalog.txt', skip_header=1)
+    MBH, T = np.genfromtxt("SMBHmass_local_AGNlifetime_pairs.txt", unpack=True, skip_header=3)
 ################################################################################################
 
 
