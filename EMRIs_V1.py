@@ -90,6 +90,7 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
     emri_within_T = min(t_migr, t_gw) < T
 
     # for EMRIs this is not a binary quantity but depends only on SMBH spin (assumed random)
+    # spin=0.99
     spin=np.random.rand()
     # future task - add SMBH spin distribution to draw from?
     chi_eff = 2 * spin - 1  # in [-1, 1]
@@ -99,14 +100,16 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
 
     # code frankesteined in by Jupiter
 
-    R_isco=jscript.R_isco_function(MBH, spin)
-
-    if is_emri is True:
-        Lisa_flag, Lisa_radii=jscript.LISAband_flag(r0, R_isco, MBH, m, print = True)
-        # print(Lisa_radii)
-
+    # if is_emri==True:
+    #     R_isco=jscript.R_isco_function(MBH, spin)
+    #     rG=ct.G*MBH*(1/(ct.c*ct.c))
+    #     Lisa_flag, Lisa_radii=jscript.LISAband_flag(r0, R_isco, MBH, m1, print = printing)
+    #     print(f'EMRI enters LISA band at {Lisa_radii/rG} R_G')
+    # elif is_emri==False:
+    #     print(f'EMRI does not enter LISA band')
+    #     Lisa_radii=0
     
-    #assume zero eccentricity
+     #assume zero eccentricity
     return f"{np.log10(Mbh/ct.MSun):.1f} {m1/ct.MSun:.3e} {r0/Rs:.3e} {chi_eff:.3e} {T/(1e6*ct.yr):.3e} {t_gw/(1e6*ct.yr):.3e} {t_migr/(1e6*ct.yr):.3e} {is_emri} {Ng}\n"
 
 

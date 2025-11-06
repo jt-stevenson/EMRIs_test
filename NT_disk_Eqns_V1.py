@@ -1,7 +1,15 @@
+import numpy as np
+
+import matplotlib.pyplot as plt
+import multiprocessing
+
+c = 2.99792458e8  # m/s
+G = 6.67430e-11  # m^3 kg^-1 s^-2
+MSun = 1.98847e30  # kg
 
 def R_isco_function(MBH, spin):
     #function to calculate innermost stable circular orbit for a BH of given mass and spin
-    R_G=ct.G*MBH*(1/(ct.c*ct.c))
+    R_G=G*MBH*(1/(c*c))
     Z_1= 1 + ((1-(spin*spin))**(1/3)) * ((1+spin)**(1/3) + (1-spin)**(1/3))
     Z_2=(3*spin*spin + Z_1*Z_1)**(1/2)
     R_isco=R_G*(3+Z_2 - ((3-Z_1)*(3+Z_1+2*Z_2))**(1/2))
@@ -11,6 +19,7 @@ def R_isco_function(MBH, spin):
 # Eqns 99 from Abramowicz and Fragile for NT Disk Profile
 
 def y_fns(MBH, spin):
+    M=MBH * G /(c*c)
     r_isco=R_isco_function(MBH, spin)
 
     y0=np.sqrt(r_isco/M)
@@ -53,8 +62,8 @@ def Q_fn(y, MBH, spin):
     Q=Q0*(y - y0 - (3/2)*spin*np.log(y/y0) - term1 - term2 - term3)
     return Q
 
-def Sigma_NT(r, MBH, spin, mdot):
-    M=MBH * ct.G /(ct.c*ct.c)
+def Sigma_NT(r, MBH, spin, mdot, alpha):
+    M=MBH * G /(c*c)
     rstar=(r/M)
     y=np.sqrt(r/M)
 
@@ -67,8 +76,8 @@ def Sigma_NT(r, MBH, spin, mdot):
     sigma = 5 * (1/alpha) * (1/mdot) * rstar**(3/2) * (1/(A*A)) * B*B*B * C**(1/2) * E * (1/Q)
     return sigma
 
-def H_NT(r, M, spin, mdot):
-    M=MBH * ct.G /(ct.c*ct.c)
+def H_NT(r, MBH, spin, mdot):
+    M=MBH * G /(c*c)
     y=np.sqrt(r/M)
     
     A=A_fn(y, spin)
@@ -82,8 +91,8 @@ def H_NT(r, M, spin, mdot):
     return H
 
 def T_NT(r, MBH, spin, mdot, alpha):
-    M=MBH * ct.G /(ct.c*ct.c)
-    m=MBH/ct.MSun
+    M=MBH * G /(c*c)
+    m=MBH/MSun
     rstar=(r/M)
     y=np.sqrt(r/M)
 
@@ -94,9 +103,9 @@ def T_NT(r, MBH, spin, mdot, alpha):
     T= (5e7) * alpha**(-1/4) * m**(-1/4) * rstar**(-3/8) * A**(-1/2) * B**(1/2) * E**(1/4) #in Kelvin
     return T
 
-def Sigma_NT_Middle(r, MBH, spin, mdot):
-    M=MBH * ct.G /(ct.c*ct.c)
-    m=MBH/ct.MSun
+def Sigma_NT_Middle(r, MBH, spin, mdot, alpha):
+    M=MBH * G /(c*c)
+    m=MBH/MSun
     rstar=(r/M)
     y=np.sqrt(r/M)
 
@@ -148,9 +157,9 @@ def R_tr(y, MBH, spin, eps, le, alpha):
     rR=R_Rfn(y, MBH, spin)
     rT=R_Tfn(y, MBH, spin)
     rZ=R_Zfn(y, spin)
-    M=MBH * ct.G /(ct.c*ct.c)
+    M=MBH * G /(c*c)
     L_term = (0.1 * eps**(-1) * le * 10)**(16/21)
-    M_term = (10 * alpha * MBH * (1e8 * ct.MSun)**(-1))**(2/21)
+    M_term = (10 * alpha * MBH * (1e8 * MSun)**(-1))**(2/21)
     R_term = rR**(6/7) * rZ**(-10/21) * rT**(-2/21)
     rTR=340 * M * L_term * M_term * R_term
     return rTR
@@ -159,15 +168,20 @@ def R_tr(y, MBH, spin, eps, le, alpha):
 
 def GW_freq_fn(r, MBH, m):
     M=MBH+m
-    f= 1/np.pi * (ct.G * M * 1/(r*r*r))**(1/2)
+    f= 1/np.pi * (G * M * 1/(r*r*r))**(1/2)
     return f
 
-def LISAband_flag(Rstart, Rmin, MBH, m):
-    lisa_flag=0
+def LISAband_flag(Rstart, Rmin, MBH, m, print=False):
+    lisa_flag=False
+    lisa_radii=0
     R=np.linspace(Rstart, Rmin, 10000000)
     for r in R:
         GW_f=GW_freq_fn(r, MBH, m)
-        R_G=ct.G*MBH*(1/(ct.c*ct.c))
-        if 1.0>GW_f>0.0001 and lisa_flag==0:
-            print(f'EMRI enters LISA band at {r/R_G} R_G')
-            lisa_flag+=1
+        R_G=G*MBH*(1/(c*c))
+        if 1.0>GW_f>0.0001 and lisa_flag is False:
+            if print is True:
+                print(f'EMRI enters LISA band at {r/R_G} R_G')
+            lisa_flag=True
+            lisa_radii=r/R_G
+            break
+    return lisa_flag, lisa_radii
