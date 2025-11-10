@@ -1,0 +1,8 @@
+# ignore .txt files
+*.txt
+
+#ignore output files in their own subdirectories
+EMRIs/
+EMRIs_Jupiter/
+outputs/
+

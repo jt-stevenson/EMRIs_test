@@ -110,14 +110,13 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
     #     Lisa_radii=0
 
 
-    rG=ct.G*MBH*(1/(ct.c*ct.c))
+    rG=ct.G*Mbh*(1/(ct.c*ct.c))
 
-    M=MBH+m1
+    M=Mbh+m1
 
     #Rmin= jscript.R_isco_function(MBH, spin) #uses relativistic eqn for ISCO to set inner edge of disc
     # Rmax=1e4*rG #for the sake of this quick maths it doesn't really matter what this is as long as its large 
-
-    lisa_flag, lisa_radii=jscript.LISAband_flag(r0, Rmin, MBH, m1)
+    lisa_flag, lisa_radii=jscript.LISAband_flag(r0, Rmin, Mbh, m1)
     # if lisa_flag!=0:
     #     print(f'EMRI with SMBH {MBH/ct.MSun:.3e} MSun, SBH {m1/ct.MSun:.3e} MSun, SMBH spin {spin:.3e} enters LISA band at {lisa_radii/rG:.3e} R_G')
     # elif lisa_flag==0:

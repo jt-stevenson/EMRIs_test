@@ -1,5 +1,4 @@
 import binary_formation_distribution_V8 as myscript
-import NT_disk_Eqns_V1 as jscript
 
 import matplotlib.pyplot as plt
 import pagn.constants as ct
@@ -98,18 +97,7 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
     # final flag
     is_emri = emri_flag and emri_within_T
 
-    # code frankesteined in by Jupiter
-
-    # if is_emri==True:
-    #     R_isco=jscript.R_isco_function(MBH, spin)
-    #     rG=ct.G*MBH*(1/(ct.c*ct.c))
-    #     Lisa_flag, Lisa_radii=jscript.LISAband_flag(r0, R_isco, MBH, m1, print = printing)
-    #     print(f'EMRI enters LISA band at {Lisa_radii/rG} R_G')
-    # elif is_emri==False:
-    #     print(f'EMRI does not enter LISA band')
-    #     Lisa_radii=0
-    
-     #assume zero eccentricity
+    #assume zero eccentricity
     return f"{np.log10(Mbh/ct.MSun):.1f} {m1/ct.MSun:.3e} {r0/Rs:.3e} {chi_eff:.3e} {T/(1e6*ct.yr):.3e} {t_gw/(1e6*ct.yr):.3e} {t_migr/(1e6*ct.yr):.3e} {is_emri} {Ng}\n"
 
 

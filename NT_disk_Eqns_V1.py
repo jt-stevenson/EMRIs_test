@@ -175,11 +175,10 @@ def GW_freq_fn(r, MBH, m):
 def LISAband_flag(Rstart, Rmin, MBH, m):
     lisa_flag=0
     lisa_radii=0
-    R=np.linspace(Rstart, Rmin, 1000)
+    R=np.linspace(Rstart, Rmin, 10000)
     for r in R:
-        GW_f=GW_freq_fn(r, MBH, m)
-        R_G=G*MBH*(1/(c*c))
-        if 1.0>GW_f>0.0001 and lisa_flag==0:
+        GWf=GW_freq_fn(r, MBH, m)
+        if 1.0>GWf>0.0001 and lisa_flag==0:
             lisa_radii+=r
             lisa_flag+=1
             break
