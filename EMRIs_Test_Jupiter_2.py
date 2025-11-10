@@ -114,7 +114,7 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
 
     M=MBH+m1
 
-    Rmin= jscript.R_isco_function(MBH, spin) #uses relativistic eqn for ISCO to set inner edge of disc
+    #Rmin= jscript.R_isco_function(MBH, spin) #uses relativistic eqn for ISCO to set inner edge of disc
     # Rmax=1e4*rG #for the sake of this quick maths it doesn't really matter what this is as long as its large 
 
     lisa_flag, lisa_radii=jscript.LISAband_flag(r0, Rmin, MBH, m1)

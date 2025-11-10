@@ -1,0 +1,12 @@
+Parameters:
+version     = V1
+date_time   = 251110_113405
+comp_time   = 0
+disk_type   = SG
+torque_type = G23
+alpha       = 0.010
+gen         = 1g
+N           = 100
+
+Data:
+logMBH/Msun, m1/Msun, r0/Rg, chi_eff, T/Myr, t_gw/Myr, t_migr/Myr, is_emri, Ng, lisa_radii/Rg, lisa_flag

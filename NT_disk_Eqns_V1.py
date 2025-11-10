@@ -171,17 +171,16 @@ def GW_freq_fn(r, MBH, m):
     f= 1/np.pi * (G * M * 1/(r*r*r))**(1/2)
     return f
 
-def LISAband_flag(Rstart, Rmin, MBH, m, print=False):
-    lisa_flag=False
+
+def LISAband_flag(Rstart, Rmin, MBH, m):
+    lisa_flag=0
     lisa_radii=0
-    R=np.linspace(Rstart, Rmin, 10000000)
+    R=np.linspace(Rstart, Rmin, 1000)
     for r in R:
         GW_f=GW_freq_fn(r, MBH, m)
         R_G=G*MBH*(1/(c*c))
-        if 1.0>GW_f>0.0001 and lisa_flag is False:
-            if print is True:
-                print(f'EMRI enters LISA band at {r/R_G} R_G')
-            lisa_flag=True
-            lisa_radii=r/R_G
+        if 1.0>GW_f>0.0001 and lisa_flag==0:
+            lisa_radii+=r
+            lisa_flag+=1
             break
     return lisa_flag, lisa_radii
