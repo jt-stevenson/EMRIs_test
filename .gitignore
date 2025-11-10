@@ -1,5 +1,7 @@
 # ignore .txt files
 *.txt
+*.pdf
+*.dat
 
 #ignore output files in their own subdirectories
 EMRIs/
