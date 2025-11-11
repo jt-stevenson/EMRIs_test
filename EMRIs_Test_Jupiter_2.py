@@ -11,12 +11,14 @@ import os
 from datetime import datetime
 from datetime import datetime
 from tqdm import tqdm
+from scipy.integrate import solve_ivp
 
 start = datetime.now()
 warnings.filterwarnings('ignore')
 
 printing=True
 plotting=True
+type_II_computation = "conservative" 
 
 import binary_formation_distribution_V8 as myscript
 import NT_disk_Eqns_V1 as jscript
@@ -84,10 +86,10 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
     L = m1 * np.sqrt(ct.G * Mbh * r0)
     t_migr = L / np.abs(Gamma_r0)
 
-    # GW inspiral time 
+    # GW inspiral time
     t_gw = (5 / 256) * (ct.c**5 / (ct.G**3)) * (r0**4) / (m1 * Mbh**2)
 
-    # ispiral happens within disk's lifetime
+    # inspiral happens within disk's lifetime
     emri_within_T = min(t_migr, t_gw) < T
 
     # for EMRIs this is not a binary quantity but depends only on SMBH spin (assumed random)
@@ -98,33 +100,81 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
     # final flag
     is_emri = emri_flag and emri_within_T
 
-        # code frankesteined in by Jupiter
+    # code frankesteined in from binary_formation_distribution_V8 by Jupiter
 
-    # if is_emri==True:
-    #     R_isco=jscript.R_isco_function(MBH, spin)
-    #     rG=ct.G*MBH*(1/(ct.c*ct.c))
-    #     Lisa_flag, Lisa_radii=jscript.LISAband_flag(r0, R_isco, MBH, m1, print = printing)
-    #     print(f'EMRI enters LISA band at {Lisa_radii/rG} R_G')
-    # elif is_emri==False:
-    #     print(f'EMRI does not enter LISA band')
-    #     Lisa_radii=0
+    M1=np.array([m1])
 
+    gap = np.full(M1.shape, 'type_I', dtype='<U7')
+
+    Gammas = myscript.compute_torque_function(args, disk, m1, Mbh)
+
+    gap_event_1 = myscript.type_II_event(disk, m1, Mbh) 
+
+    solution1 = solve_ivp(fun=myscript.rdot, 
+                            t_span=[t0, T], 
+                            y0=[r0],
+                            method='RK23', 
+                            events=(myscript.trap_dist, gap_event_1), 
+                            first_step=1e3*ct.yr,
+                            rtol=1e-3,
+                            atol=1e-9,
+                            args=(m1, Gammas, Mbh, traps))
+
+    t1 = solution1.t
+    r1 = solution1.y[0]
+
+    ## check whether "events" happened (reaching Type I migration trap or doing Type II migration, or crossing inner edge of disk)
+    # if you open a gap
+    # keep integrating with Type II torque
+    if len(solution1.t_events[1]) >0:
+        print("1 does type II")
+        gap[0]='type_II'
+        t_gap = solution1.t_events[1][0]
+        r_gap = solution1.y_events[1][0][0]
+        # Stage 2 : Type II migration
+        if (type_II_computation == "conservative") or (type_II_computation == "conservative+extra_h_condition"):
+            solution1_TypeII = solve_ivp(myscript.rdot_typeII, [t_gap, T], [r_gap],
+                                     args=(disk,),
+                                     first_step=1e3*ct.yr, rtol=1e-3, atol=0.0)
+        elif type_II_computation == "modified_type_I":
+            solution1_TypeII = solve_ivp(myscript.rdot_typeII_Kanagawa2018, [t_gap, T], [r_gap],
+                                     args=(M[0], disk, Mbh,),
+                                     first_step=1e3*ct.yr, rtol=1e-3, atol=0.0)
+        print("integration type II concluded")
+        # Stitch the two segments 
+        t1 = np.concatenate((t1, solution1_TypeII.t[1:]))     # skip duplicate t_gap
+        r1 = np.concatenate((r1, solution1_TypeII.y[0][1:]))
+    elif len(solution1.t_events[0])>0:
+        t1 = np.append(t1, T)
+        r1 = np.append(r1, r1[-1])
+    # else: 
+    #     if len(solution1.t_events[2])>0:
+    #         t1 = np.append(t1, T)
+    #         r1 = np.append(r1, r1[-1])
+
+    #Jupiter Original Code...
+
+    #We want to find the location of the secondary (SBH) when the disc disperses to check if the signal produced is in the LISA band
+    t_final=t1[len(t1)-1]
+    r_final=r1[len(r1)-1]
 
     rG=ct.G*Mbh*(1/(ct.c*ct.c))
 
+    if t_final!=T:
+        print('SOMETHING HAS GONE WRONG!')
+    
+    print(f'For SMBH {Mbh/ct.MSun:.3e} Msun and SBH {m1/ct.MSun:.3e} Msun, At time T={T/(1e6*ct.yr):.3e}={t_final/(1e6*ct.yr):.3e} Myrs, R_final={r_final/rG:.3e} Rg')
+
     M=Mbh+m1
 
-    #Rmin= jscript.R_isco_function(MBH, spin) #uses relativistic eqn for ISCO to set inner edge of disc
-    # Rmax=1e4*rG #for the sake of this quick maths it doesn't really matter what this is as long as its large 
-    lisa_flag, lisa_radii=jscript.LISAband_flag(r0, Rmin, Mbh, m1)
+    lisa_flag, lisa_radii=jscript.LISAband_flag(r0, r_final, Mbh, m1)
     # if lisa_flag!=0:
     #     print(f'EMRI with SMBH {MBH/ct.MSun:.3e} MSun, SBH {m1/ct.MSun:.3e} MSun, SMBH spin {spin:.3e} enters LISA band at {lisa_radii/rG:.3e} R_G')
     # elif lisa_flag==0:
     #     print(f'EMRI doesnt enter LISA band')
 
     #assume zero eccentricity
-    #return f"{np.log10(Mbh/ct.MSun):.1f} {m1/ct.MSun:.3e} {r0/Rs:.3e} {chi_eff:.3e} {T/(1e6*ct.yr):.3e} {t_gw/(1e6*ct.yr):.3e} {t_migr/(1e6*ct.yr):.3e} {is_emri} {Ng}\n"
-    return f"{np.log10(Mbh/ct.MSun):.1f} {m1/ct.MSun:.3e} {r0/rG:.3e} {chi_eff:.3e} {T/(1e6*ct.yr):.3e} {t_gw/(1e6*ct.yr):.3e} {t_migr/(1e6*ct.yr):.3e} {is_emri} {Ng} {lisa_radii/rG:.3e} {lisa_flag}\n"
+    return f"{np.log10(Mbh/ct.MSun):.1f} {m1/ct.MSun:.3e} {r0/rG:.3e} {chi_eff:.3e} {T/(1e6*ct.yr):.3e} {t_gw/(1e6*ct.yr):.3e} {t_migr/(1e6*ct.yr):.3e} {is_emri} {Ng} {r_final/rG:.3e} {lisa_radii/rG:.3e} {lisa_flag}\n"
 
 ################################################################################################
 ### Read parameters from input #################################################################
@@ -182,7 +232,7 @@ if __name__ == '__main__':
         file.write(f"N           = {args.N}\n")
         file.write(f"\n")
         file.write(f"Data:\n")
-        file.write(f"logMBH/Msun, m1/Msun, r0/Rg, chi_eff, T/Myr, t_gw/Myr, t_migr/Myr, is_emri, Ng, lisa_radii/Rg, lisa_flag\n")
+        file.write(f"logMBH/Msun, m1/Msun, r0/Rg, chi_eff, T/Myr, t_gw/Myr, t_migr/Myr, is_emri, Ng, R_final/Rg, lisa_radii/Rg, lisa_flag\n")
 ################################################################################################
 
 ################################################################################################
