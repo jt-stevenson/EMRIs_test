@@ -5,6 +5,8 @@
 
 #ignore output files in their own subdirectories
 EMRIs/
+LISA_EMRIs/
+flagged_EMRIs/
 EMRIs_Jupiter/
 outputs/
 

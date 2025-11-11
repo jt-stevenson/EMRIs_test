@@ -123,7 +123,9 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
     t1 = solution1.t
     r1 = solution1.y[0]
 
-    ## check whether "events" happened (reaching Type I migration trap or doing Type II migration, or crossing inner edge of disk)
+    #check whether "events" happened (reaching Type I migration trap or doing Type II migration, or crossing inner edge of disk)
+    #shouldn't reach trap, but want to keep in in th ecase hat we begin integrating from further out than inside the first trap
+
     # if you open a gap
     # keep integrating with Type II torque
     if len(solution1.t_events[1]) >0:
@@ -160,10 +162,12 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
 
     rG=ct.G*Mbh*(1/(ct.c*ct.c))
 
-    if t_final!=T:
+    if t_final!=T and printing==True:
         print('SOMETHING HAS GONE WRONG!')
+        quit()
     
-    print(f'For SMBH {Mbh/ct.MSun:.3e} Msun and SBH {m1/ct.MSun:.3e} Msun, At time T={T/(1e6*ct.yr):.3e}={t_final/(1e6*ct.yr):.3e} Myrs, R_final={r_final/rG:.3e} Rg')
+    if printing==True:
+        print(f'For SMBH {Mbh/ct.MSun:.3e} Msun and SBH {m1/ct.MSun:.3e} Msun, At time T={T/(1e6*ct.yr):.3e}={t_final/(1e6*ct.yr):.3e} Myrs, R_final={r_final/rG:.3e} Rg')
 
     M=Mbh+m1
 
@@ -173,8 +177,20 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
     # elif lisa_flag==0:
     #     print(f'EMRI doesnt enter LISA band')
 
+    # Flag to indicate one of four outcomes for plotting
+    # final_flag=0, no inspiral w/in Tdisc, undetectable by LISA
+    # final_flag=1, detectable by LISA, does not inspiral within Tdisc
+    # final_flag=2, inspiral w/in T_disc, undetectable by LISA
+    # final_flag=4, inspirals w/in T_disc, detectable by LISA
+    if is_emri==True:
+        is_EMRI=2
+    elif is_emri==False:
+        is_EMRI=0
+
+    final_flag=is_EMRI+lisa_flag
+
     #assume zero eccentricity
-    return f"{np.log10(Mbh/ct.MSun):.1f} {m1/ct.MSun:.3e} {r0/rG:.3e} {chi_eff:.3e} {T/(1e6*ct.yr):.3e} {t_gw/(1e6*ct.yr):.3e} {t_migr/(1e6*ct.yr):.3e} {is_emri} {Ng} {r_final/rG:.3e} {lisa_radii/rG:.3e} {lisa_flag}\n"
+    return f"{np.log10(Mbh/ct.MSun):.1f} {m1/ct.MSun:.3e} {r0/rG:.3e} {chi_eff:.3e} {T/(1e6*ct.yr):.3e} {t_gw/(1e6*ct.yr):.3e} {t_migr/(1e6*ct.yr):.3e} {is_emri} {Ng} {r_final/rG:.3e} {lisa_radii/rG:.3e} {lisa_flag} {final_flag}\n"
 
 ################################################################################################
 ### Read parameters from input #################################################################
@@ -232,7 +248,7 @@ if __name__ == '__main__':
         file.write(f"N           = {args.N}\n")
         file.write(f"\n")
         file.write(f"Data:\n")
-        file.write(f"logMBH/Msun, m1/Msun, r0/Rg, chi_eff, T/Myr, t_gw/Myr, t_migr/Myr, is_emri, Ng, R_final/Rg, lisa_radii/Rg, lisa_flag\n")
+        file.write(f"logMBH/Msun, m1/Msun, r0/Rg, chi_eff, T/Myr, t_gw/Myr, t_migr/Myr, is_emri, Ng, R_final/Rg, lisa_radii/Rg, lisa_flag, final_flag\n")
 ################################################################################################
 
 ################################################################################################
