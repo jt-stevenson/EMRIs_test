@@ -199,7 +199,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-DT', type=str, default="SG", choices=['SG', 'TQM'])
     parser.add_argument('-TT', type=str, default="G23", choices=['B16', 'G23'])
-    parser.add_argument('-gen', type=str, default='1g', choices=['1g', 'Ng'])
+    parser.add_argument('-gen', type=str, default='Ng', choices=['1g', 'Ng'])
     parser.add_argument('-a', type=float, default=0.01)    # real number
     parser.add_argument('-N', type=int, default=100) # integer number
     parser.add_argument('-plot', action='store_true')      # truth value
@@ -228,8 +228,8 @@ if __name__ == '__main__':
         dir_name = f"EMRIs_Jupiter/{args.DT}/alpha_{args.a}/"
         if not os.path.exists(dir_name):
             os.makedirs(dir_name)
-        file_name = dir_name+f"/EMRIs_{args.TT}_{args.gen}.txt"
-        file_name_1g = dir_name+f"/EMRIs_{args.TT}_1g.txt"
+        file_name = dir_name+f"/EMRIs_{args.TT}_{args.gen}_{args.N}_events.txt"
+        file_name_1g = dir_name+f"/EMRIs_{args.TT}_1g_{args.N}_events.txt"
         if args.gen=='Ng' and  not os.path.exists(file_name_1g):
             print()
             print('There is no 1g source for this Ng simulation. Run the same simulation for 1g first!')
