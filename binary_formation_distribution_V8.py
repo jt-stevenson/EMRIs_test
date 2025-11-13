@@ -262,11 +262,11 @@ def compute_torque(args, disk, M, Mbh):
     Gamma_I_jm17 = cI_jm17*Gamma_0
 
     if args.TT=="B16": 
-        return Gamma_I_p10 + Gamma_GW
+        return Gamma_I_p10 #+ Gamma_GW
     elif args.TT=="G23": 
         gamma = 5/3
         Gamma_therm = gamma_thermal(gamma, disk, q)*Gamma_0
-        return Gamma_therm + Gamma_I_jm17 + Gamma_I_p10 + Gamma_GW
+        return Gamma_therm + Gamma_I_jm17 + Gamma_GW #+ Gamma_I_p10 + Gamma_GW
 
 def compute_torque_function(args, disk, M, Mbh):
     Gamma_tot = compute_torque(args, disk, M, Mbh)
@@ -297,7 +297,7 @@ def rdot_typeII_Kanagawa2018(t, y, M, disk, M_SMBH):
     
     ### Computing torque
     Gamma_0 = gamma_0(q, disk.h / disk.R, Sigma_reduced, disk.R, disk.Omega)
-    Gamma_GW = gamma_GW(disk.R, M, Mbh)
+    #Gamma_GW = gamma_GW(disk.R, M, Mbh)
 
     dSig = dSigmadR(disk)
     dT = dTdR(disk)
@@ -307,11 +307,11 @@ def rdot_typeII_Kanagawa2018(t, y, M, disk, M_SMBH):
     Gamma_I_jm17 = cI_jm17*Gamma_0
 
     if args.TT=="B16": 
-        Gamma = Gamma_I_p10 + Gamma_GW
+        Gamma = Gamma_I_p10 #+ Gamma_GW
     elif args.TT=="G23": 
         gamma = 5/3
         Gamma_therm = gamma_thermal(gamma, disk, q)*Gamma_0
-        Gamma = Gamma_therm + Gamma_I_jm17 + Gamma_I_p10 + Gamma_GW
+        Gamma = Gamma_therm + Gamma_I_jm17 #+ Gamma_GW + Gamma_I_p10
     ###
 
     Gamma_of_r = interp1d(disk.R, Gamma, kind="linear", fill_value="extrapolate")

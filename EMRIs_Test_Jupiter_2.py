@@ -25,7 +25,7 @@ import NT_disk_Eqns_V1 as jscript
 
 ################################################################################################
 ### Simulation routine #########################################################################
-################################################################################################
+################################################################################################xs
 def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
     # initialize random number generator for the radii and the masses
     seed = (os.getpid() + int(time.time() * 1e6)) % 2**32
@@ -100,7 +100,14 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
     # final flag
     is_emri = emri_flag and emri_within_T
 
-    # code frankesteined in from binary_formation_distribution_V8 by Jupiter
+    # code frankesteined in from binary_formation_distribution_V8 by Jupiter, Some Original Code
+
+    lisa_entry_radii=0
+    lisa_exit_radii=0
+    lisa_flag=0
+
+    t_lisa_entry=0
+    t_lisa_exit=0
 
     M1=np.array([m1])
 
@@ -108,13 +115,23 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
 
     Gammas = myscript.compute_torque_function(args, disk, m1, Mbh)
 
-    gap_event_1 = myscript.type_II_event(disk, m1, Mbh) 
+    gap_event_1 = myscript.type_II_event(disk, m1, Mbh)
+    # LISAentry_1=jscript.LISA_band_enter(Mbh, m1)
+    # LISAexit_1=jscript.LISA_band_exit(Mbh, m1)
+    Rs_event_1=jscript.r_s_event(Mbh, m1)
+
+    # print(f'LISA ENTRY {LISAentry_1}, LISA EXIT {LISAexit_1}')
+
+    GWf=jscript.GW_freq_fn(r0, Mbh, m1)
+    if 1.0>GWf>0.0001:
+        lisa_radii=r0
+        lisa_flag=1
 
     solution1 = solve_ivp(fun=myscript.rdot, 
                             t_span=[t0, T], 
                             y0=[r0],
                             method='RK23', 
-                            events=(myscript.trap_dist, gap_event_1), 
+                            events=(myscript.trap_dist, gap_event_1, jscript.LISA_band_enter , Rs_event_1), #, Rs_event_1)
                             first_step=1e3*ct.yr,
                             rtol=1e-3,
                             atol=1e-9,
@@ -124,7 +141,6 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
     r1 = solution1.y[0]
 
     #check whether "events" happened (reaching Type I migration trap or doing Type II migration, or crossing inner edge of disk)
-    #shouldn't reach trap, but want to keep in in th ecase hat we begin integrating from further out than inside the first trap
 
     # if you open a gap
     # keep integrating with Type II torque
@@ -146,13 +162,67 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
         # Stitch the two segments 
         t1 = np.concatenate((t1, solution1_TypeII.t[1:]))     # skip duplicate t_gap
         r1 = np.concatenate((r1, solution1_TypeII.y[0][1:]))
-    elif len(solution1.t_events[0])>0:
-        t1 = np.append(t1, T)
+    
+    elif len(solution1.t_events[0])>0:  #checks if trap is reached- shouldn't happen due to conditions on r0, but want to keep incase we begin integrating from further out than inside the first trap
+        t1 = np.append(t1, T)           #or for some other weirdness
         r1 = np.append(r1, r1[-1])
-    # else: 
-    #     if len(solution1.t_events[2])>0:
-    #         t1 = np.append(t1, T)
-    #         r1 = np.append(r1, r1[-1])
+    
+    else: 
+        if len(solution1.t_events[2])>0: #check if sbh has entered the LISA band
+            lisa_entry_radii=solution1.y_events[2][0][0]
+            t_lisa_entry=solution1.t_events[2][0]
+            lisa_flag=1
+            solution1_lisa_entry = solve_ivp(fun=myscript.rdot, 
+                            t_span=[t_lisa_entry, T], 
+                            y0=[lisa_entry_radii],
+                            method='RK23', 
+                            events=(jscript.LISA_band_exit, Rs_event_1), #, Rs_event_1
+                            first_step=1e3*ct.yr,
+                            rtol=1e-3,
+                            atol=1e-9,
+                            args=(m1, Gammas, Mbh, traps))
+            t2=solution1_lisa_entry.t[1:]
+            r2=solution1_lisa_entry.y[0][1:]
+
+            if len(solution1_lisa_entry.t_events[0])>0: #check if sbh leaves the lisa band
+                lisa_exit_radii = solution1_lisa_entry.y_events[0][0][0]
+                t_lisa_exit=solution1_lisa_entry.t_events[0][0]
+                lisa_flag=1
+                solution1_lisa_exit = solve_ivp(fun=myscript.rdot, 
+                            t_span=[t_lisa_exit, T], 
+                            y0=[lisa_entry_radii],
+                            method='RK23', 
+                            events=(Rs_event_1), 
+                            first_step=1e3*ct.yr,
+                            rtol=1e-3,
+                            atol=1e-9,
+                            args=(m1, Gammas, Mbh, traps))
+                t3=solution1_lisa_exit.t[1:]
+                r3=solution1_lisa_exit.y[0][1:]
+
+                if len(solution1_lisa_exit.t_events[0])>0: #check if sbh crosses SMBH event horizon after leaving LISA band
+                    t4 = np.append(t3, T)
+                    r4 = np.append(r3, r3[-1])
+
+                    t3=np.concatenate((t3, t4))
+                    r3=np.concatenate((r3, r4))
+
+                t2 = np.concatenate((t2, t3))
+                r2 = np.concatenate((r2, r3))
+
+            elif len(solution1_lisa_entry.t_events[1])>0 and len(solution1_lisa_entry.t_events[0])<0: #check if sbh crosses SMBH event horizon if LISA band not left
+                t3 = np.append(t3, T)
+                r3 = np.append(r3, r3[-1])
+
+                t2 = np.concatenate((t2, t3))
+                r2 = np.concatenate((r2, r3))
+
+            t1 = np.concatenate((t1, t2))
+            r1 = np.concatenate((r1, r2))
+        
+        elif len(solution1.t_events[2])<0 and len(solution1.t_events[3])>0: #check if sbh crosses SMBH event horizon if lisa band never entered
+            t1 = np.append(t1, T)
+            r1 = np.append(r1, r1[-1])
 
     #Jupiter Original Code...
 
@@ -163,15 +233,22 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
     rG=ct.G*Mbh*(1/(ct.c*ct.c))
 
     if t_final!=T and printing==True:
-        print('SOMETHING HAS GONE WRONG!')
-        quit()
+        print(f'SOMETHING HAS GONE WRONG! T={T/(1e6*ct.yr):.3e}!=t_final={t_final/(1e6*ct.yr):.3e}')
     
     if printing==True:
         print(f'For SMBH {Mbh/ct.MSun:.3e} Msun and SBH {m1/ct.MSun:.3e} Msun, At time T={T/(1e6*ct.yr):.3e}={t_final/(1e6*ct.yr):.3e} Myrs, R_final={r_final/rG:.3e} Rg')
 
     M=Mbh+m1
 
-    lisa_flag, lisa_radii=jscript.LISAband_flag(r0, r_final, Mbh, m1)
+    # lisa_flag, lisa_radii=jscript.LISAband_flag(r0, r_final, Mbh, m1)
+    lisa_radii=lisa_entry_radii
+
+    if t_lisa_exit==0:
+        t_lisa=t_lisa_entry-t_final
+    elif t_lisa_exit!=0:
+        t_lisa=t_lisa_entry-t_lisa_exit
+
+
     # if lisa_flag!=0:
     #     print(f'EMRI with SMBH {MBH/ct.MSun:.3e} MSun, SBH {m1/ct.MSun:.3e} MSun, SMBH spin {spin:.3e} enters LISA band at {lisa_radii/rG:.3e} R_G')
     # elif lisa_flag==0:
@@ -190,7 +267,7 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
     final_flag=is_EMRI+lisa_flag
 
     #assume zero eccentricity
-    return f"{np.log10(Mbh/ct.MSun):.1f} {m1/ct.MSun:.3e} {r0/rG:.3e} {chi_eff:.3e} {T/(1e6*ct.yr):.3e} {t_gw/(1e6*ct.yr):.3e} {t_migr/(1e6*ct.yr):.3e} {is_emri} {Ng} {r_final/rG:.3e} {lisa_radii/rG:.3e} {lisa_flag} {final_flag}\n"
+    return f"{np.log10(Mbh/ct.MSun):.1f} {m1/ct.MSun:.3e} {r0/rG:.3e} {chi_eff:.3e} {T/(1e6*ct.yr):.3e} {t_gw/(1e6*ct.yr):.3e} {t_migr/(1e6*ct.yr):.3e} {is_emri} {Ng} {r_final/rG:.3e} {lisa_radii/rG:.3e} {lisa_exit_radii/rG:.3e} {t_lisa/(1e6*ct.yr):.3e} {lisa_flag} {final_flag}\n"
 
 ################################################################################################
 ### Read parameters from input #################################################################
@@ -199,9 +276,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-DT', type=str, default="SG", choices=['SG', 'TQM'])
     parser.add_argument('-TT', type=str, default="G23", choices=['B16', 'G23'])
-    parser.add_argument('-gen', type=str, default='Ng', choices=['1g', 'Ng'])
+    parser.add_argument('-gen', type=str, default='1g', choices=['1g', 'Ng'])
     parser.add_argument('-a', type=float, default=0.01)    # real number
-    parser.add_argument('-N', type=int, default=100) # integer number
+    parser.add_argument('-N', type=int, default=1000) # integer number
     parser.add_argument('-plot', action='store_true')      # truth value
     parser.add_argument('-date', action='store_true')      # truth value
     
@@ -225,11 +302,11 @@ if __name__ == '__main__':
     if printing == True:
         date_time = start.strftime("%y%m%d_%H%M%S")
 
-        dir_name = f"EMRIs_Jupiter/{args.DT}/alpha_{args.a}/"
+        dir_name = f"EMRIs_Jupiter_2/{args.DT}/alpha_{args.a}/"
         if not os.path.exists(dir_name):
             os.makedirs(dir_name)
-        file_name = dir_name+f"/EMRIs_{args.TT}_{args.gen}_{args.N}_events.txt"
-        file_name_1g = dir_name+f"/EMRIs_{args.TT}_1g_{args.N}_events.txt"
+        file_name = dir_name+f"/EMRIs_{args.TT}_{args.gen}_{args.N}_events_with_GW.txt"
+        file_name_1g = dir_name+f"/EMRIs_{args.TT}_1g_{args.N}_events_with_GW.txt"
         if args.gen=='Ng' and  not os.path.exists(file_name_1g):
             print()
             print('There is no 1g source for this Ng simulation. Run the same simulation for 1g first!')
@@ -248,7 +325,7 @@ if __name__ == '__main__':
         file.write(f"N           = {args.N}\n")
         file.write(f"\n")
         file.write(f"Data:\n")
-        file.write(f"logMBH/Msun, m1/Msun, r0/Rg, chi_eff, T/Myr, t_gw/Myr, t_migr/Myr, is_emri, Ng, R_final/Rg, lisa_radii/Rg, lisa_flag, final_flag\n")
+        file.write(f"logMBH/Msun, m1/Msun, r0/Rg, chi_eff, T/Myr, t_gw/Myr, t_migr/Myr, is_emri, Ng, R_final/Rg, lisa_radii/Rg, lisa_exit_radii/Rg, t_lisa/Myr, lisa_flag, final_flag\n")
 ################################################################################################
 
 ################################################################################################

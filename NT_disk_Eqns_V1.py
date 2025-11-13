@@ -183,3 +183,29 @@ def LISAband_flag(Rstart, Rmin, MBH, m):
             lisa_flag+=1
             break
     return lisa_flag, lisa_radii
+
+# defined event to check if SBH has hit the event horizon
+def r_s_event(MBH, m):
+    Rs=2*G*MBH /(c*c)
+    Rs_sbh=2*G*m /(c*c)
+    def crossing_event(t,y, *fargs):
+        r = y[0]
+        return r - (Rs-Rs_sbh)
+    crossing_event.terminal=True # Stops Integreation
+    crossing_event.direction= -1 # Trigger when r crosses threshold from above
+
+    return crossing_event
+
+def LISA_band_exit(t, y, m1, Gammas, Mbh, traps):
+    r=y[0]
+    GWf=GW_freq_fn(r, Mbh, m1)
+    return GWf-0.1
+LISA_band_exit.terminal = True
+LISA_band_exit.direction = 0
+
+def LISA_band_enter(t, y, m1, Gammas, Mbh, traps):
+    r=y[0]
+    GWf=GW_freq_fn(r, Mbh, m1)
+    return GWf-0.001
+LISA_band_enter.terminal = True
+LISA_band_enter.direction = 0
