@@ -169,6 +169,7 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
     
     else: 
         if len(solution1.t_events[2])>0: #check if sbh has entered the LISA band
+            print('SBH has entered LISA band')
             lisa_entry_radii=solution1.y_events[2][0][0]
             t_lisa_entry=solution1.t_events[2][0]
             lisa_flag=1
@@ -176,7 +177,7 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
                             t_span=[t_lisa_entry, T], 
                             y0=[lisa_entry_radii],
                             method='RK23', 
-                            events=(jscript.LISA_band_exit, Rs_event_1), #, Rs_event_1
+                            events=(jscript.LISA_band_exit, Rs_event_1),
                             first_step=1e3*ct.yr,
                             rtol=1e-3,
                             atol=1e-9,
@@ -185,6 +186,7 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
             r2=solution1_lisa_entry.y[0][1:]
 
             if len(solution1_lisa_entry.t_events[0])>0: #check if sbh leaves the lisa band
+                print('SBH has left LISA band')
                 lisa_exit_radii = solution1_lisa_entry.y_events[0][0][0]
                 t_lisa_exit=solution1_lisa_entry.t_events[0][0]
                 lisa_flag=1
@@ -201,6 +203,7 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
                 r3=solution1_lisa_exit.y[0][1:]
 
                 if len(solution1_lisa_exit.t_events[0])>0: #check if sbh crosses SMBH event horizon after leaving LISA band
+                    print('SBH has crossed EH')
                     t4 = np.append(t3, T)
                     r4 = np.append(r3, r3[-1])
 
@@ -210,17 +213,19 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
                 t2 = np.concatenate((t2, t3))
                 r2 = np.concatenate((r2, r3))
 
-            elif len(solution1_lisa_entry.t_events[1])>0 and len(solution1_lisa_entry.t_events[0])<0: #check if sbh crosses SMBH event horizon if LISA band not left
-                t3 = np.append(t3, T)
-                r3 = np.append(r3, r3[-1])
+            elif len(solution1_lisa_entry.t_events[1])>0 and len(solution1_lisa_entry.t_events[0])==0: #check if sbh crosses SMBH event horizon if LISA band not left
+                print('SBH has crossed EH')
+                t2 = np.append(t2, T)
+                r2 = np.append(r2, r2[-1])
 
-                t2 = np.concatenate((t2, t3))
-                r2 = np.concatenate((r2, r3))
+                # t2 = np.concatenate((t2, t3))
+                # r2 = np.concatenate((r2, r3))
 
             t1 = np.concatenate((t1, t2))
             r1 = np.concatenate((r1, r2))
         
-        elif len(solution1.t_events[2])<0 and len(solution1.t_events[3])>0: #check if sbh crosses SMBH event horizon if lisa band never entered
+        elif len(solution1.t_events[2])==0 and len(solution1.t_events[3])>0: #check if sbh crosses SMBH event horizon if lisa band never entered
+            print('SBH has crossed EH')
             t1 = np.append(t1, T)
             r1 = np.append(r1, r1[-1])
 
@@ -266,6 +271,8 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
 
     final_flag=is_EMRI+lisa_flag
 
+    t_lisa=np.abs(t_lisa)
+
     #assume zero eccentricity
     return f"{np.log10(Mbh/ct.MSun):.1f} {m1/ct.MSun:.3e} {r0/rG:.3e} {chi_eff:.3e} {T/(1e6*ct.yr):.3e} {t_gw/(1e6*ct.yr):.3e} {t_migr/(1e6*ct.yr):.3e} {is_emri} {Ng} {r_final/rG:.3e} {lisa_radii/rG:.3e} {lisa_exit_radii/rG:.3e} {t_lisa/(1e6*ct.yr):.3e} {lisa_flag} {final_flag}\n"
 
@@ -278,7 +285,7 @@ def main():
     parser.add_argument('-TT', type=str, default="G23", choices=['B16', 'G23'])
     parser.add_argument('-gen', type=str, default='1g', choices=['1g', 'Ng'])
     parser.add_argument('-a', type=float, default=0.01)    # real number
-    parser.add_argument('-N', type=int, default=1000) # integer number
+    parser.add_argument('-N', type=int, default=10) # integer number
     parser.add_argument('-plot', action='store_true')      # truth value
     parser.add_argument('-date', action='store_true')      # truth value
     
