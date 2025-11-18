@@ -143,119 +143,122 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
         lisa_radii=r0
         lisa_flag=4
 
-    solution1 = solve_ivp(fun=myscript.rdot, 
-                            t_span=[t0, T], 
-                            y0=[r0],
-                            method='RK23', 
-                            events=(myscript.trap_dist, gap_event_1, jscript.LISA_band_enter , R_event_1), #, Rs_event_1)
-                            first_step=1e3*ct.yr,
-                            rtol=1e-3,
-                            atol=1e-9,
-                            args=(m1, Gammas, Mbh, traps))
-
-    t1 = solution1.t
-    r1 = solution1.y[0]
-
-    #check whether "events" happened (reaching Type I migration trap or doing Type II migration, or crossing inner edge of disk)
-
-    # if you open a gap
-    # keep integrating with Type II torque
-    if len(solution1.t_events[1]) >0:
-        print("SBH does type II")
-        gap[0]='type_II'
-        t_gap = solution1.t_events[1][0]
-        r_gap = solution1.y_events[1][0][0]
-        # Stage 2 : Type II migration
-        if (type_II_computation == "conservative") or (type_II_computation == "conservative+extra_h_condition"):
-            solution1_TypeII = solve_ivp(myscript.rdot_typeII, [t_gap, T], [r_gap],
-                                     args=(disk,),
-                                     first_step=1e3*ct.yr, rtol=1e-3, atol=0.0)
-        elif type_II_computation == "modified_type_I":
-            solution1_TypeII = solve_ivp(myscript.rdot_typeII_Kanagawa2018, [t_gap, T], [r_gap],
-                                     args=(M[0], disk, Mbh,),
-                                     first_step=1e3*ct.yr, rtol=1e-3, atol=0.0)
-        print("integration type II concluded")
-        # Stitch the two segments 
-        t1 = np.concatenate((t1, solution1_TypeII.t[1:]))     # skip duplicate t_gap
-        r1 = np.concatenate((r1, solution1_TypeII.y[0][1:]))
-    
-    elif len(solution1.t_events[0])>0:  #checks if trap is reached- shouldn't happen due to conditions on r0, but want to keep incase we begin integrating from further out than inside the first trap
-        t1 = np.append(t1, T)           #or for some other weirdness
-        r1 = np.append(r1, r1[-1])
-    
-    else: 
-        if len(solution1.t_events[2])>0: #check if sbh has entered the LISA band
-            print('SBH has entered LISA band')
-            lisa_entry_radii=solution1.y_events[2][0][0]
-            t_lisa_entry=solution1.t_events[2][0]
-            lisa_flag=4
-            solution1_lisa_entry = solve_ivp(fun=myscript.rdot, 
-                            t_span=[t_lisa_entry, T], 
-                            y0=[lisa_entry_radii],
-                            method='RK23', 
-                            events=(jscript.LISA_band_exit, R_event_1),
-                            first_step=1e3*ct.yr,
-                            rtol=1e-3,
-                            atol=1e-9,
-                            args=(m1, Gammas, Mbh, traps))
-            t2=solution1_lisa_entry.t[1:]
-            r2=solution1_lisa_entry.y[0][1:]
-
-            if len(solution1_lisa_entry.t_events[0])>0: #check if sbh leaves the lisa band
-                print('SBH has left LISA band')
-                lisa_exit_radii = solution1_lisa_entry.y_events[0][0][0]
-                t_lisa_exit=solution1_lisa_entry.t_events[0][0]
-                lisa_flag=4
-                solution1_lisa_exit = solve_ivp(fun=myscript.rdot, 
-                            t_span=[t_lisa_exit, T], 
-                            y0=[lisa_entry_radii],
-                            method='RK23', 
-                            events=(R_event_1), 
-                            first_step=1e3*ct.yr,
-                            rtol=1e-3,
-                            atol=1e-9,
-                            args=(m1, Gammas, Mbh, traps))
-                t3=solution1_lisa_exit.t[1:]
-                r3=solution1_lisa_exit.y[0][1:]
-
-                if len(solution1_lisa_exit.t_events[0])>0: #check if sbh crosses SMBH event horizon after leaving LISA band
-                    print('SBH has crossed EH')
-                    t4 = np.append(t3, T)
-                    r4 = np.append(r3, r3[-1])
-
-                    t3=np.concatenate((t3, t4))
-                    r3=np.concatenate((r3, r4))
-
-                t2 = np.concatenate((t2, t3))
-                r2 = np.concatenate((r2, r3))
-
-            elif len(solution1_lisa_entry.t_events[1])>0 and len(solution1_lisa_entry.t_events[0])==0: #check if sbh crosses SMBH event horizon if LISA band not left
-                print('SBH has crossed EH')
-                t2 = np.append(t2, T)
-                r2 = np.append(r2, r2[-1])
-
-                # t2 = np.concatenate((t2, t3))
-                # r2 = np.concatenate((r2, r3))
-
-            t1 = np.concatenate((t1, t2))
-            r1 = np.concatenate((r1, r2))
-        
-        elif len(solution1.t_events[2])==0 and len(solution1.t_events[3])>0: #check if sbh crosses SMBH event horizon if lisa band never entered
-            print('SBH has crossed EH')
-            t1 = np.append(t1, T)
-            r1 = np.append(r1, r1[-1])
-
-    #Jupiter Original Code...
-
-    #We want to find the location of the secondary (SBH) when the disc disperses to check if the signal produced is in the LISA band
-    t_final=t1[len(t1)-1]
-    r_final=r1[len(r1)-1]
-
-    final_time=10*T
-
-    print(f'input for extension {t_final}, {final_time}, {r_final}')
-
     if emri_within_T==False and emri_flag==True:
+        print('Success! Disc setup found for Dried EMRI with SMBH {Mbh/ct.MSun:.3e} Msun and SBH {m1/ct.MSun:.3e} Msun, r0 {r0/Rg:.3e} Rg')
+
+        solution1 = solve_ivp(fun=myscript.rdot, 
+                                t_span=[t0, T], 
+                                y0=[r0],
+                                method='RK23', 
+                                events=(myscript.trap_dist, gap_event_1, jscript.LISA_band_enter , R_event_1), #, Rs_event_1)
+                                first_step=1e3*ct.yr,
+                                rtol=1e-3,
+                                atol=1e-9,
+                                args=(m1, Gammas, Mbh, traps))
+
+        t1 = solution1.t
+        r1 = solution1.y[0]
+
+        #check whether "events" happened (reaching Type I migration trap or doing Type II migration, or crossing inner edge of disk)
+
+        # if you open a gap
+        # keep integrating with Type II torque
+        if len(solution1.t_events[1]) >0:
+            print("SBH does type II")
+            gap[0]='type_II'
+            t_gap = solution1.t_events[1][0]
+            r_gap = solution1.y_events[1][0][0]
+            # Stage 2 : Type II migration
+            if (type_II_computation == "conservative") or (type_II_computation == "conservative+extra_h_condition"):
+                solution1_TypeII = solve_ivp(myscript.rdot_typeII, [t_gap, T], [r_gap],
+                                        args=(disk,),
+                                        first_step=1e3*ct.yr, rtol=1e-3, atol=0.0)
+            elif type_II_computation == "modified_type_I":
+                solution1_TypeII = solve_ivp(myscript.rdot_typeII_Kanagawa2018, [t_gap, T], [r_gap],
+                                        args=(M[0], disk, Mbh,),
+                                        first_step=1e3*ct.yr, rtol=1e-3, atol=0.0)
+            print("integration type II concluded")
+            # Stitch the two segments 
+            t1 = np.concatenate((t1, solution1_TypeII.t[1:]))     # skip duplicate t_gap
+            r1 = np.concatenate((r1, solution1_TypeII.y[0][1:]))
+        
+        elif len(solution1.t_events[0])>0:  #checks if trap is reached- shouldn't happen due to conditions on r0, but want to keep incase we begin integrating from further out than inside the first trap
+            t1 = np.append(t1, T)           #or for some other weirdness
+            r1 = np.append(r1, r1[-1])
+        
+        else: 
+            if len(solution1.t_events[2])>0: #check if sbh has entered the LISA band
+                print('SBH has entered LISA band')
+                lisa_entry_radii=solution1.y_events[2][0][0]
+                t_lisa_entry=solution1.t_events[2][0]
+                lisa_flag=4
+                solution1_lisa_entry = solve_ivp(fun=myscript.rdot, 
+                                t_span=[t_lisa_entry, T], 
+                                y0=[lisa_entry_radii],
+                                method='RK23', 
+                                events=(jscript.LISA_band_exit, R_event_1),
+                                first_step=1e3*ct.yr,
+                                rtol=1e-3,
+                                atol=1e-9,
+                                args=(m1, Gammas, Mbh, traps))
+                t2=solution1_lisa_entry.t[1:]
+                r2=solution1_lisa_entry.y[0][1:]
+
+                if len(solution1_lisa_entry.t_events[0])>0: #check if sbh leaves the lisa band
+                    print('SBH has left LISA band')
+                    lisa_exit_radii = solution1_lisa_entry.y_events[0][0][0]
+                    t_lisa_exit=solution1_lisa_entry.t_events[0][0]
+                    lisa_flag=4
+                    solution1_lisa_exit = solve_ivp(fun=myscript.rdot, 
+                                t_span=[t_lisa_exit, T], 
+                                y0=[lisa_entry_radii],
+                                method='RK23', 
+                                events=(R_event_1), 
+                                first_step=1e3*ct.yr,
+                                rtol=1e-3,
+                                atol=1e-9,
+                                args=(m1, Gammas, Mbh, traps))
+                    t3=solution1_lisa_exit.t[1:]
+                    r3=solution1_lisa_exit.y[0][1:]
+
+                    if len(solution1_lisa_exit.t_events[0])>0: #check if sbh crosses SMBH event horizon after leaving LISA band
+                        print('SBH has crossed EH')
+                        t4 = np.append(t3, T)
+                        r4 = np.append(r3, r3[-1])
+
+                        t3=np.concatenate((t3, t4))
+                        r3=np.concatenate((r3, r4))
+
+                    t2 = np.concatenate((t2, t3))
+                    r2 = np.concatenate((r2, r3))
+
+                elif len(solution1_lisa_entry.t_events[1])>0 and len(solution1_lisa_entry.t_events[0])==0: #check if sbh crosses SMBH event horizon if LISA band not left
+                    print('SBH has crossed EH')
+                    t2 = np.append(t2, T)
+                    r2 = np.append(r2, r2[-1])
+
+                    # t2 = np.concatenate((t2, t3))
+                    # r2 = np.concatenate((r2, r3))
+
+                t1 = np.concatenate((t1, t2))
+                r1 = np.concatenate((r1, r2))
+            
+            elif len(solution1.t_events[2])==0 and len(solution1.t_events[3])>0: #check if sbh crosses SMBH event horizon if lisa band never entered
+                print('SBH has crossed EH')
+                t1 = np.append(t1, T)
+                r1 = np.append(r1, r1[-1])
+
+        #Jupiter Original Code...
+
+        #We want to find the location of the secondary (SBH) when the disc disperses to check if the signal produced is in the LISA band
+        t_final=t1[len(t1)-1]
+        r_final=r1[len(r1)-1]
+
+        final_time=10*T
+
+        print(f'input for extension {t_final}, {final_time}, {r_final}')
+
+        
         print('Running trajectory beyond disc evaporation to check for "dried" EMRI...')
         solution1_extended = solve_ivp(fun=myscript.rdot, 
                             t_span=[t_final, final_time], 
@@ -335,43 +338,43 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
         t_final=t1[len(t1)-1]
         r_final=r1[len(r1)-1]
 
-    rG=ct.G*Mbh*(1/(ct.c*ct.c))
+        rG=ct.G*Mbh*(1/(ct.c*ct.c))
 
-    if t_final!=T and printing==True:
-        print(f'SOMETHING HAS GONE WRONG! T={T/(1e6*ct.yr):.3e}!=t_final={t_final/(1e6*ct.yr):.3e}')
-    
-    if printing==True:
-        print(f'For SMBH {Mbh/ct.MSun:.3e} Msun and SBH {m1/ct.MSun:.3e} Msun with r0 {r0/rG:.3e} Rg, At time T={T/(1e6*ct.yr):.3e}={t_final/(1e6*ct.yr):.3e} Myrs, R_final={r_final/rG:.3e} Rg')
-        print(f"emri flag {emri_flag}, emri within T {emri_within_T}")
-    M=Mbh+m1
+        if t_final!=T and printing==True:
+            print(f'SOMETHING HAS GONE WRONG! T={T/(1e6*ct.yr):.3e}!=t_final={t_final/(1e6*ct.yr):.3e}')
+        
+        if printing==True:
+            print(f'For SMBH {Mbh/ct.MSun:.3e} Msun and SBH {m1/ct.MSun:.3e} Msun with r0 {r0/rG:.3e} Rg, At time T={T/(1e6*ct.yr):.3e}={t_final/(1e6*ct.yr):.3e} Myrs, R_final={r_final/rG:.3e} Rg')
+            print(f"emri flag {emri_flag}, emri within T {emri_within_T}")
+        M=Mbh+m1
 
-    # lisa_flag, lisa_radii=jscript.LISAband_flag(r0, r_final, Mbh, m1)
-    lisa_radii=lisa_entry_radii
+        # lisa_flag, lisa_radii=jscript.LISAband_flag(r0, r_final, Mbh, m1)
+        lisa_radii=lisa_entry_radii
 
-    if t_lisa_exit==0:
-        t_lisa=t_lisa_entry-t_final
-    elif t_lisa_exit!=0:
-        t_lisa=t_lisa_entry-t_lisa_exit
+        if t_lisa_exit==0:
+            t_lisa=t_lisa_entry-t_final
+        elif t_lisa_exit!=0:
+            t_lisa=t_lisa_entry-t_lisa_exit
 
 
-    # if lisa_flag!=0:
-    #     print(f'EMRI with SMBH {MBH/ct.MSun:.3e} MSun, SBH {m1/ct.MSun:.3e} MSun, SMBH spin {spin:.3e} enters LISA band at {lisa_radii/rG:.3e} R_G')
-    # elif lisa_flag==0:
-    #     print(f'EMRI doesnt enter LISA band')
+        # if lisa_flag!=0:
+        #     print(f'EMRI with SMBH {MBH/ct.MSun:.3e} MSun, SBH {m1/ct.MSun:.3e} MSun, SMBH spin {spin:.3e} enters LISA band at {lisa_radii/rG:.3e} R_G')
+        # elif lisa_flag==0:
+        #     print(f'EMRI doesnt enter LISA band')
 
-    # Flag to indicate one of four outcomes for plotting - INCORRECT, NEEDS UPDATING
-    # final_flag=0, no inspiral w/in Tdisc, undetectable by LISA
-    # final_flag=1, detectable by LISA, does not inspiral within Tdisc
-    # final_flag=2, inspiral w/in T_disc, undetectable by LISA
-    # final_flag=4, inspirals w/in T_disc, detectable by LISA
-    final_flag=is_EMRI+lisa_flag
+        # Flag to indicate one of four outcomes for plotting - INCORRECT, NEEDS UPDATING
+        # final_flag=0, no inspiral w/in Tdisc, undetectable by LISA
+        # final_flag=1, detectable by LISA, does not inspiral within Tdisc
+        # final_flag=2, inspiral w/in T_disc, undetectable by LISA
+        # final_flag=4, inspirals w/in T_disc, detectable by LISA
+        final_flag=is_EMRI+lisa_flag
 
-    t_lisa=np.abs(t_lisa)
+        t_lisa=np.abs(t_lisa)
 
-    flags=inspiral_flag+Tdisc_flag+lisa_flag
+        flags=inspiral_flag+Tdisc_flag+lisa_flag
 
-    #assume zero eccentricity
-    return f"{np.log10(Mbh/ct.MSun):.1f} {m1/ct.MSun:.3e} {r0/rG:.3e} {chi_eff:.3e} {T/(1e6*ct.yr):.3e} {t_gw/(1e6*ct.yr):.3e} {t_migr/(1e6*ct.yr):.3e} {is_emri} {Ng} {r_final/rG:.3e} {lisa_radii/rG:.3e} {lisa_exit_radii/rG:.3e} {t_lisa/(1e6*ct.yr):.3e} {t_final/(1e6*ct.yr):.3e} {lisa_flag} {flags}\n"
+        #assume zero eccentricity
+        return f"{np.log10(Mbh/ct.MSun):.1f} {m1/ct.MSun:.3e} {r0/rG:.3e} {chi_eff:.3e} {T/(1e6*ct.yr):.3e} {t_gw/(1e6*ct.yr):.3e} {t_migr/(1e6*ct.yr):.3e} {is_emri} {Ng} {r_final/rG:.3e} {lisa_radii/rG:.3e} {lisa_exit_radii/rG:.3e} {t_lisa/(1e6*ct.yr):.3e} {t_final/(1e6*ct.yr):.3e} {lisa_flag} {flags}\n"
 
 ################################################################################################
 ### Read parameters from input #################################################################
@@ -382,7 +385,7 @@ def main():
     parser.add_argument('-TT', type=str, default="G23", choices=['B16', 'G23'])
     parser.add_argument('-gen', type=str, default='1g', choices=['1g', 'Ng'])
     parser.add_argument('-a', type=float, default=0.01)    # real number
-    parser.add_argument('-N', type=int, default=5000) # integer number
+    parser.add_argument('-N', type=int, default=10000) # integer number
     parser.add_argument('-plot', action='store_true')      # truth value
     parser.add_argument('-date', action='store_true')      # truth value
     
@@ -406,7 +409,7 @@ if __name__ == '__main__':
     if printing == True:
         date_time = start.strftime("%y%m%d_%H%M%S")
 
-        dir_name = f"EMRIs_Jupiter_2/c_{c}/spin_{spin}/{args.DT}/alpha_{args.a}/"
+        dir_name = f"EMRIs_Jupiter_Dried/c_{c}/spin_{spin}/{args.DT}/alpha_{args.a}/"
         if not os.path.exists(dir_name):
             os.makedirs(dir_name)
         file_name = dir_name+f"/EMRIs_{args.TT}_{args.gen}_{args.N}_events_with_GW.txt"

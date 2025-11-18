@@ -2,6 +2,8 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 import multiprocessing
+import binary_formation_distribution_V8 as myscript
+from scipy.interpolate import interp1d
 
 c = 2.99792458e8  # m/s
 G = 6.67430e-11  # m^3 kg^-1 s^-2
@@ -196,6 +198,18 @@ def r_s_event(MBH, m):
 
     return crossing_event
 
+# "" isco
+def r_isco_event(MBH, m, spin):
+    r_isco=R_isco_function(MBH, spin)
+    Rs_sbh=2*G*m /(c*c)
+    def crossing_event(t,y, *fargs):
+        r = y[0]
+        return r - (r_isco-Rs_sbh)
+    crossing_event.terminal=True # Stops Integreation
+    crossing_event.direction= -1 # Trigger when r crosses threshold from above
+
+    return crossing_event
+
 def LISA_band_exit(t, y, m1, Gammas, Mbh, traps):
     r=y[0]
     GWf=GW_freq_fn(r, Mbh, m1)
@@ -209,3 +223,18 @@ def LISA_band_enter(t, y, m1, Gammas, Mbh, traps):
     return GWf-0.001
 LISA_band_enter.terminal = True
 LISA_band_enter.direction = 0
+
+def compute_torque_GW(args, disk, M, Mbh):
+    q = M / Mbh
+
+    Gamma_GW = myscript.gamma_GW(disk.R, M, Mbh)
+
+    if args.TT=="B16": 
+        return + Gamma_GW
+    elif args.TT=="G23": 
+        gamma = 5/3
+        return Gamma_GW 
+
+def compute_torque_function(args, disk, M, Mbh):
+    Gamma_tot = compute_torque_GW(args, disk, M, Mbh)
+    return interp1d(disk.R, Gamma_tot, kind='linear', fill_value='extrapolate')
