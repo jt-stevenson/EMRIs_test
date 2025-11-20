@@ -144,7 +144,7 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
         lisa_flag=4
 
     if emri_within_T==False and emri_flag==True:
-        print('Success! Disc setup found for Dried EMRI with SMBH {Mbh/ct.MSun:.3e} Msun and SBH {m1/ct.MSun:.3e} Msun, r0 {r0/Rg:.3e} Rg')
+        print(f'Success! Disc setup found for Dried EMRI with SMBH {Mbh/ct.MSun:.3e} Msun and SBH {m1/ct.MSun:.3e} Msun, r0 {r0/Rg:.3e} Rg')
 
         solution1 = solve_ivp(fun=myscript.rdot, 
                                 t_span=[t0, T], 
@@ -371,6 +371,16 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
 
         t_lisa=np.abs(t_lisa)
 
+        # Flag to indicate one of four outcomes for plotting
+        # flags=0, no inspiral, no signif migration w/in Tdisc, undetectable by LISA
+        # flags=1, inspiral, no signif mig w/in Tdisc, undetectable by LISA
+        # flags=2, no inspiral, signif mig w/in T_disc, undetectable by LISA
+        # flags=3, inspiral, signif mig w/in T_disc, undetectable by LISA
+        # flags=4, no inspiral, no signif mig w/in T_disc, detected by LISA
+        # flags=5, inspiral, no signif mig w/in T_disc, detected by LISA
+        # flags=6, no inspiral, signif mig w/in T_disc, detected by LISA
+        # flags=7, inspiral, signif mig w/in T_disc, detected by LISA
+
         flags=inspiral_flag+Tdisc_flag+lisa_flag
 
         #assume zero eccentricity
@@ -385,7 +395,7 @@ def main():
     parser.add_argument('-TT', type=str, default="G23", choices=['B16', 'G23'])
     parser.add_argument('-gen', type=str, default='1g', choices=['1g', 'Ng'])
     parser.add_argument('-a', type=float, default=0.01)    # real number
-    parser.add_argument('-N', type=int, default=10000) # integer number
+    parser.add_argument('-N', type=int, default=20) # integer number
     parser.add_argument('-plot', action='store_true')      # truth value
     parser.add_argument('-date', action='store_true')      # truth value
     
@@ -422,14 +432,14 @@ if __name__ == '__main__':
 
         # print all parameters in the file
         file.write(f"Parameters:\n")
-        file.write(f"version     = V1\n")
-        file.write(f"date_time   = {date_time}\n")
-        file.write(f"comp_time   = {0}\n")
-        file.write(f"disk_type   = {args.DT}\n")
+        file.write(f"version = V1\n")
+        file.write(f"date_time = {date_time}\n")
+        file.write(f"comp_time = {0}\n")
+        file.write(f"disk_type = {args.DT}\n")
         file.write(f"torque_type = {args.TT}\n")
-        file.write(f"alpha       = {args.a:.3f}\n")
-        file.write(f"gen         = {args.gen}\n")
-        file.write(f"N           = {args.N}\n")
+        file.write(f"alpha = {args.a:.3f}\n")
+        file.write(f"gen = {args.gen}\n")
+        file.write(f"N = {args.N}\n")
         file.write(f"\n")
         file.write(f"Data:\n")
         file.write(f"logMBH/Msun, m1/Msun, r0/Rg, chi_eff, T/Myr, t_gw/Myr, t_migr/Myr, is_emri, Ng, R_final/Rg, lisa_radii/Rg, lisa_exit_radii/Rg, t_lisa/Myr, t_final/Myr, lisa_flag, total_flags\n")

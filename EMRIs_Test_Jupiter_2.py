@@ -19,8 +19,10 @@ warnings.filterwarnings('ignore')
 printing=True
 plotting=True
 type_II_computation = "conservative" 
-c=2000
-spin=0.9
+C=17205
+Spin=0.9
+
+Fixed=True
 
 import binary_formation_distribution_V8 as myscript
 import NT_disk_Eqns_V1 as jscript
@@ -34,7 +36,14 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
     np.random.seed(seed)
 
     # Initialization of the Disk 
-    # c = np.random.randint(0, len(MBH))
+
+    if Fixed==False:
+        c = np.random.randint(0, len(MBH))
+        spin=np.random.rand()
+    if Fixed==True:
+        c=C
+        spin=Spin
+    
     Mbh = MBH[c] * ct.MSun    # M_SMBH
     T = T[c] * 1e6 * ct.yr           # disk lifetime
     alpha = args.a                   # viscosity parameter
@@ -97,7 +106,7 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
     # for EMRIs this is not a binary quantity but depends only on SMBH spin (assumed random)
     # spin=np.random.rand()
     # future task - add SMBH spin distribution to draw from?
-    chi_eff = 2 * np.random.rand() - 1  # in [-1, 1]
+    chi_eff = 2 * spin - 1  # in [-1, 1]
 
     # final flag
     is_emri = emri_flag and emri_within_T
@@ -251,7 +260,7 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
     t_final=t1[len(t1)-1]
     r_final=r1[len(r1)-1]
 
-    final_time=10*T
+    final_time=20*T
 
     print(f'input for extension {t_final}, {final_time}, {r_final}')
 
@@ -368,11 +377,22 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
 
     t_lisa=np.abs(t_lisa)
 
+    #flags=0, no inspiral, no signif migration within tdisk, undetected by LISA
+    #flags=1, inspiral, no signif migration within tdisk, undetected by LISA
+    #flags=2, no inspiral, signif migration within tdisk, undetected by LISA
+    #flags=3, inspiral, signif migration within tdisk, undetected by LISA
+    #flags=4, no inspiral, no signif migration within tdisk, detected by LISA
+    #flags=5, inspiral, no signif migration within tdisk, detected by LISA
+    #flags=6, no inspiral, signif migration within tdisk, detected by LISA
+    #flags=7, inspiral, signif migration within tdisk, detected by LISA
     flags=inspiral_flag+Tdisc_flag+lisa_flag
 
     #assume zero eccentricity
-    return f"{np.log10(Mbh/ct.MSun):.1f} {m1/ct.MSun:.3e} {r0/rG:.3e} {chi_eff:.3e} {T/(1e6*ct.yr):.3e} {t_gw/(1e6*ct.yr):.3e} {t_migr/(1e6*ct.yr):.3e} {is_emri} {Ng} {r_final/rG:.3e} {lisa_radii/rG:.3e} {lisa_exit_radii/rG:.3e} {t_lisa/(1e6*ct.yr):.3e} {t_final/(1e6*ct.yr):.3e} {lisa_flag} {flags}\n"
-
+    if Fixed==True:
+        return f"{m1/ct.MSun:.3e} {r0/rG:.3e} {t_gw/(1e6*ct.yr):.3e} {t_migr/(1e6*ct.yr):.3e} {is_emri} {Ng} {r_final/rG:.3e} {lisa_radii/rG:.3e} {t_lisa/(1e6*ct.yr):.3e} {t_final/(1e6*ct.yr):.3e} {lisa_flag} {flags}\n"
+    elif Fixed==False:
+        return f"{np.log10(Mbh/ct.MSun):.1f} {m1/ct.MSun:.3e} {r0/rG:.3e} {chi_eff:.3e} {T/(1e6*ct.yr):.3e} {t_gw/(1e6*ct.yr):.3e} {t_migr/(1e6*ct.yr):.3e} {is_emri} {Ng} {r_final/rG:.3e} {lisa_radii/rG:.3e} {lisa_exit_radii/rG:.3e} {t_lisa/(1e6*ct.yr):.3e} {t_final/(1e6*ct.yr):.3e} {lisa_flag} {flags}\n"
+    
 ################################################################################################
 ### Read parameters from input #################################################################
 ################################################################################################
@@ -406,7 +426,7 @@ if __name__ == '__main__':
     if printing == True:
         date_time = start.strftime("%y%m%d_%H%M%S")
 
-        dir_name = f"EMRIs_Jupiter_2/c_{c}/spin_{spin}/{args.DT}/alpha_{args.a}/"
+        dir_name = f"EMRIs_Jupiter_2/c_{C}/{args.DT}/alpha_{args.a}/"
         if not os.path.exists(dir_name):
             os.makedirs(dir_name)
         file_name = dir_name+f"/EMRIs_{args.TT}_{args.gen}_{args.N}_events_with_GW.txt"
@@ -419,17 +439,24 @@ if __name__ == '__main__':
 
         # print all parameters in the file
         file.write(f"Parameters:\n")
-        file.write(f"version     = V1\n")
-        file.write(f"date_time   = {date_time}\n")
-        file.write(f"comp_time   = {0}\n")
-        file.write(f"disk_type   = {args.DT}\n")
+        file.write(f"version = V1\n")
+        file.write(f"date_time = {date_time}\n")
+        file.write(f"comp_time = {0}\n")
+        file.write(f"disk_type = {args.DT}\n")
         file.write(f"torque_type = {args.TT}\n")
-        file.write(f"alpha       = {args.a:.3f}\n")
-        file.write(f"gen         = {args.gen}\n")
-        file.write(f"N           = {args.N}\n")
+        file.write(f"alpha = {args.a:.3f}\n")
+        file.write(f"gen = {args.gen}\n")
+        file.write(f"N = {args.N}\n")
+        if Fixed==True:
+            file.write(f'M_smbh = {np.log10(MBH[C]/ct.MSun):.3f}\n')
+            file.write(f'Spin = {Spin}\n')
+            file.write(f'T = {T[C]/(1e6*ct.yr):.3e}\n')
         file.write(f"\n")
         file.write(f"Data:\n")
-        file.write(f"logMBH/Msun, m1/Msun, r0/Rg, chi_eff, T/Myr, t_gw/Myr, t_migr/Myr, is_emri, Ng, R_final/Rg, lisa_radii/Rg, lisa_exit_radii/Rg, t_lisa/Myr, t_final/Myr, lisa_flag, total_flags\n")
+        if Fixed==True:
+            file.write(f"m1/Msun, r0/Rg, t_gw/Myr, t_migr/Myr, is_emri, Ng, R_final/Rg, lisa_radii/Rg, t_lisa/Myr, t_final/Myr, lisa_flag, total_flags\n")
+        elif Fixed==False:
+            file.write(f"logMBH/Msun, m1/Msun, r0/Rg, chi_eff, T/Myr, t_gw/Myr, t_migr/Myr, is_emri, Ng, R_final/Rg, lisa_radii/Rg, lisa_exit_radii/Rg, t_lisa/Myr, t_final/Myr, lisa_flag, total_flags\n")
 ################################################################################################
 
 ################################################################################################
