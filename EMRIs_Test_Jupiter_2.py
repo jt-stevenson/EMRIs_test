@@ -19,7 +19,7 @@ warnings.filterwarnings('ignore')
 printing=True
 plotting=True
 type_II_computation = "conservative" 
-C=17205
+C=663176
 Spin=0.9
 
 Fixed=True
@@ -448,7 +448,7 @@ if __name__ == '__main__':
         file.write(f"gen = {args.gen}\n")
         file.write(f"N = {args.N}\n")
         if Fixed==True:
-            file.write(f'M_smbh = {np.log10(MBH[C]/ct.MSun):.3f}\n')
+            file.write(f'M_smbh = {np.log10(MBH[C]):.3f}\n')
             file.write(f'Spin = {Spin}\n')
             file.write(f'T = {T[C]/(1e6*ct.yr):.3e}\n')
         file.write(f"\n")

@@ -116,8 +116,65 @@ def Sigma_NT_Middle(r, MBH, spin, mdot, alpha):
     D=D_fn(y, spin)
     Q=Q_fn(y, MBH, spin)
 
-    sigma = (9e4) * alpha**(-4/5) * m**(1/5) * mdot**(3/5) * rstar**(-3/5) * B**(-4/5) ** C**(1/2) * D**(-4/5) * Q**(3/5)
+    sigma = (9e4) * alpha**(-4/5) * m**(1/5) * mdot**(3/5) * rstar**(-3/5) * B**(-4/5) * C**(1/2) * D**(-4/5) * Q**(3/5)
     return sigma
+
+def Sigma_NT_Middle2(r, MBH, spin, mdot, alpha):
+    M=MBH * G /(c*c)
+    m=MBH/MSun
+    rstar=(r/M)
+    y=np.sqrt(r/M)
+
+    B=B_fn(y, spin)
+    C=C_fn(y, spin)
+    D=D_fn(y, spin)
+    Q=Q_fn(y, MBH, spin)
+
+    sigma = (9e4) * alpha**(-4/5) * m**(1/5) * mdot**(3/5) * rstar**(-3/5) * B**(-4/5) * C**(1/2) * D**(-4/5) * Q**(3/5)
+    return(sigma)
+
+def Sigma_NT_Outer(r, MBH, spin, mdot, alpha):
+    M=MBH * G /(c*c)
+    m=MBH/MSun
+    rstar=(r/M)
+    y=np.sqrt(r/M)
+
+    A=A_fn(y, spin)
+    B=B_fn(y, spin)
+    C=C_fn(y, spin)
+    D=D_fn(y, spin)
+    E=E_fn(y, spin)
+    Q=Q_fn(y, MBH, spin)
+
+    sigma = (4e5) * alpha**(-4/5) * m**(1/5) * mdot**(7/10) * rstar**(-3/4) * A**(1/20) * B**(-4/5) * C**(1/2) * D**(-17/20) * E**(-1/20) * Q**(7/10)
+    return(sigma)
+
+def T_NT_Middle(r, MBH, spin, mdot, alpha):
+    M=MBH * G /(c*c)
+    m=MBH/MSun
+    rstar=(r/M)
+    y=np.sqrt(r/M)
+
+    B=B_fn(y, spin)
+    D=D_fn(y, spin)
+    Q=Q_fn(y, MBH, spin)
+
+    T = (7e8) * alpha**(-1/5) * m**(-1/5) * mdot**(2/5) * rstar**(-9/10) * B**(-2/5) * D**(-1/5) * Q**(2/5)
+    return(T)
+
+def T_NT_Outer(r, MBH, spin, mdot, alpha):
+    M=MBH * G /(c*c)
+    m=MBH/MSun
+    rstar=(r/M)
+    y=np.sqrt(r/M)
+
+    A=A_fn(y, spin)
+    B=B_fn(y, spin)
+    D=D_fn(y, spin)
+    Q=Q_fn(y, MBH, spin)
+
+    T = (2e8) * alpha**(-1/5) * m**(-1/5) * mdot**(3/10) * rstar**(-3/4) * A**(-1/10) * B**(-1/5) * D**(-1/5) * D**(-3/10) * Q**(3/5)
+    return(T)
 
 #Eqns from Krolik 1999 to check where transition between inner and outer SS (and thereby NT) disc equations is
 #And if our assumption is valid only using inner equations
