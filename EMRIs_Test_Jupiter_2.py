@@ -140,7 +140,8 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
     gap = np.full(M1.shape, 'type_I', dtype='<U7')
 
     Gammas = myscript.compute_torque_function(args, disk, m1, Mbh)
-    Gammas_GW = jscript.compute_torque_function(args, disk, m1, Mbh)
+    Gammas_GW = jscript.compute_GW_torque_function(args, disk, m1, Mbh)
+    Gammas_no_GW=jscript.compute_noGW_torque_function(args, disk, m1, Mbh)
 
     gap_event_1 = myscript.type_II_event(disk, m1, Mbh)
     R_event_1=jscript.r_isco_event(Mbh, m1, spin)

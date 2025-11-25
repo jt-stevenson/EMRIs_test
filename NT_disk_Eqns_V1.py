@@ -176,6 +176,21 @@ def T_NT_Outer(r, MBH, spin, mdot, alpha):
     T = (2e8) * alpha**(-1/5) * m**(-1/5) * mdot**(3/10) * rstar**(-3/4) * A**(-1/10) * B**(-1/5) * D**(-1/5) * D**(-3/10) * Q**(3/5)
     return(T)
 
+def rho_NT(r, MBH, spin, mdot, alpha):
+    M=MBH * G /(c*c)
+    m=MBH/MSun
+    rstar=(r/M)
+    y=np.sqrt(r/M)
+
+    A=A_fn(y, spin)
+    B=B_fn(y, spin)
+    D=D_fn(y, spin)
+    E=E_fn(y, spin)
+    Q=Q_fn(y, MBH, spin)
+
+    rho_0 = 2e-5 * alpha**(-1) * m**(-1) * mdot**(-2) * rstar**(3/2) * A**(-4) * B**6 * D * E*E * Q**(-2)
+    return(rho_0)
+
 #Eqns from Krolik 1999 to check where transition between inner and outer SS (and thereby NT) disc equations is
 #And if our assumption is valid only using inner equations
 
@@ -287,11 +302,35 @@ def compute_torque_GW(args, disk, M, Mbh):
     Gamma_GW = myscript.gamma_GW(disk.R, M, Mbh)
 
     if args.TT=="B16": 
-        return + Gamma_GW
+        return Gamma_GW
     elif args.TT=="G23": 
         gamma = 5/3
         return Gamma_GW 
 
-def compute_torque_function(args, disk, M, Mbh):
+def compute_GW_torque_function(args, disk, M, Mbh):
     Gamma_tot = compute_torque_GW(args, disk, M, Mbh)
+    return interp1d(disk.R, Gamma_tot, kind='linear', fill_value='extrapolate')
+
+def compute_noGW_torque(args, disk, M, Mbh):
+    q = M / Mbh
+    
+    Gamma_0 = myscript.gamma_0(q, disk.h / disk.R, 2 * disk.rho * disk.h, disk.R, disk.Omega)
+    Gamma_GW = myscript.gamma_GW(disk.R, M, Mbh)
+
+    dSig = myscript.dSigmadR(disk)
+    dT = myscript.dTdR(disk)
+    cI_p10 = myscript.CI_p10(disk, dSig, dT)
+    Gamma_I_p10 = cI_p10*Gamma_0
+    cI_jm17 = myscript.CI_jm17_tot(dSig, dT, 5/3, disk)
+    Gamma_I_jm17 = cI_jm17*Gamma_0
+
+    if args.TT=="B16": 
+        return Gamma_I_p10 #+ Gamma_GW
+    elif args.TT=="G23": 
+        gamma = 5/3
+        Gamma_therm = myscript.gamma_thermal(gamma, disk, q)*Gamma_0
+        return Gamma_therm + Gamma_I_jm17 #+ Gamma_I_p10 + Gamma_GW
+
+def compute_noGW_torque_function(args, disk, M, Mbh):
+    Gamma_tot = compute_noGW_torque(args, disk, M, Mbh)
     return interp1d(disk.R, Gamma_tot, kind='linear', fill_value='extrapolate')

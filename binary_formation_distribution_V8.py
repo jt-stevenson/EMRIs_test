@@ -13,7 +13,6 @@ from datetime import datetime, timedelta
 from scipy.interpolate import interp1d
 from scipy.integrate import solve_ivp
 from scipy.optimize import fsolve
-from datetime import datetime
 from tqdm import tqdm
 
 start = datetime.now()
@@ -498,7 +497,7 @@ def iteration(Rmin, Rmax, args, mass_sec, mass_prim_vk, disk, Mbh, r_pu_1g):
         if len(solution1.t_events[0])>0:
             t1 = np.append(t1, T)
             r1 = np.append(r1, r1[-1])
-    if len(solution2.t_events[1]) >0:
+    if len(solution2.t_events[1])>0:
         gap[1]='type_II'
         t_gap = solution2.t_events[1][0]
         r_gap = solution2.y_events[1][0][0]
