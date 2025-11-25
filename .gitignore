@@ -2,6 +2,7 @@
 *.txt
 *.pdf
 *.dat
+*.png
 
 #ignore output files in their own subdirectories
 EMRIs/
