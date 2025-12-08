@@ -78,33 +78,6 @@ def Sigma_NT(r, MBH, spin, mdot, alpha):
     sigma = 5 * (1/alpha) * (1/mdot) * rstar**(3/2) * (1/(A*A)) * B*B*B * C**(1/2) * E * (1/Q)
     return sigma
 
-def H_NT(r, MBH, spin, mdot):
-    M=MBH * G /(c*c)
-    y=np.sqrt(r/M)
-    
-    A=A_fn(y, spin)
-    B=B_fn(y, spin)
-    C=C_fn(y, spin)
-    D=D_fn(y, spin)
-    E=E_fn(y, spin)
-    Q=Q_fn(y, MBH, spin)
-
-    H=1e5 * mdot * A**2 * B**(-3) * C**(1/2) * D**(-1) * E**(-1) * Q #in cms
-    return H
-
-def T_NT(r, MBH, spin, mdot, alpha):
-    M=MBH * G /(c*c)
-    m=MBH/MSun
-    rstar=(r/M)
-    y=np.sqrt(r/M)
-
-    A=A_fn(y, spin)
-    B=B_fn(y, spin)
-    E=E_fn(y, spin)
-
-    T= (5e7) * alpha**(-1/4) * m**(-1/4) * rstar**(-3/8) * A**(-1/2) * B**(1/2) * E**(1/4) #in Kelvin
-    return T
-
 def Sigma_NT_Middle(r, MBH, spin, mdot, alpha):
     M=MBH * G /(c*c)
     m=MBH/MSun
@@ -118,20 +91,6 @@ def Sigma_NT_Middle(r, MBH, spin, mdot, alpha):
 
     sigma = (9e4) * alpha**(-4/5) * m**(1/5) * mdot**(3/5) * rstar**(-3/5) * B**(-4/5) * C**(1/2) * D**(-4/5) * Q**(3/5)
     return sigma
-
-def Sigma_NT_Middle2(r, MBH, spin, mdot, alpha):
-    M=MBH * G /(c*c)
-    m=MBH/MSun
-    rstar=(r/M)
-    y=np.sqrt(r/M)
-
-    B=B_fn(y, spin)
-    C=C_fn(y, spin)
-    D=D_fn(y, spin)
-    Q=Q_fn(y, MBH, spin)
-
-    sigma = (9e4) * alpha**(-4/5) * m**(1/5) * mdot**(3/5) * rstar**(-3/5) * B**(-4/5) * C**(1/2) * D**(-4/5) * Q**(3/5)
-    return(sigma)
 
 def Sigma_NT_Outer(r, MBH, spin, mdot, alpha):
     M=MBH * G /(c*c)
@@ -148,6 +107,65 @@ def Sigma_NT_Outer(r, MBH, spin, mdot, alpha):
 
     sigma = (4e5) * alpha**(-4/5) * m**(1/5) * mdot**(7/10) * rstar**(-3/4) * A**(1/20) * B**(-4/5) * C**(1/2) * D**(-17/20) * E**(-1/20) * Q**(7/10)
     return(sigma)
+
+def H_NT(r, MBH, spin, mdot):
+    M=MBH * G /(c*c)
+    y=np.sqrt(r/M)
+    
+    A=A_fn(y, spin)
+    B=B_fn(y, spin)
+    C=C_fn(y, spin)
+    D=D_fn(y, spin)
+    E=E_fn(y, spin)
+    Q=Q_fn(y, MBH, spin)
+
+    H = 1e5 * mdot * A**2 * B**(-3) * C**(1/2) * D**(-1) * E**(-1) * Q #in cms
+    return H
+
+def H_NT_Middle(r, MBH, spin, mdot, alpha):
+    M=MBH * G /(c*c)
+    m=MBH/MSun
+    rstar=(r/M)
+    y=np.sqrt(r/M)
+    
+    A=A_fn(y, spin)
+    B=B_fn(y, spin)
+    C=C_fn(y, spin)
+    D=D_fn(y, spin)
+    E=E_fn(y, spin)
+    Q=Q_fn(y, MBH, spin)
+
+    H = 1e3 * alpha**(-1/10) * m**(9/10) * mdot**(1/5) * rstar**(21/20) * A * B**(-6/5) * C**(1/2) * D**(-3/5) * E**(-1/2) * Q**(1/5) #in cms
+    return H
+
+def H_NT_Outer(r, MBH, spin, mdot, alpha):
+    M=MBH * G /(c*c)
+    m=MBH/MSun
+    rstar=(r/M)
+    y=np.sqrt(r/M)
+    
+    A=A_fn(y, spin)
+    B=B_fn(y, spin)
+    C=C_fn(y, spin)
+    D=D_fn(y, spin)
+    E=E_fn(y, spin)
+    Q=Q_fn(y, MBH, spin)
+
+    H = 4e2 * alpha**(-1/10) * m**(18/20) * mdot**(3/20) * rstar**(9/8) * A**(19/20) * B**(-11/10) * C**(1/2) * D**(-23/40) * E**(-19/40) * Q**(3/20) #in cms
+    return H
+
+def T_NT(r, MBH, spin, mdot, alpha):
+    M=MBH * G /(c*c)
+    m=MBH/MSun
+    rstar=(r/M)
+    y=np.sqrt(r/M)
+
+    A=A_fn(y, spin)
+    B=B_fn(y, spin)
+    E=E_fn(y, spin)
+
+    T= (5e7) * alpha**(-1/4) * m**(-1/4) * rstar**(-3/8) * A**(-1/2) * B**(1/2) * E**(1/4) #in Kelvin
+    return T
 
 def T_NT_Middle(r, MBH, spin, mdot, alpha):
     M=MBH * G /(c*c)
@@ -176,7 +194,7 @@ def T_NT_Outer(r, MBH, spin, mdot, alpha):
     T = (2e8) * alpha**(-1/5) * m**(-1/5) * mdot**(3/10) * rstar**(-3/4) * A**(-1/10) * B**(-1/5) * D**(-1/5) * D**(-3/10) * Q**(3/5)
     return(T)
 
-def rho_NT(r, MBH, spin, mdot, alpha):
+def rho_0_NT(r, MBH, spin, mdot, alpha):
     M=MBH * G /(c*c)
     m=MBH/MSun
     rstar=(r/M)
@@ -189,6 +207,36 @@ def rho_NT(r, MBH, spin, mdot, alpha):
     Q=Q_fn(y, MBH, spin)
 
     rho_0 = 2e-5 * alpha**(-1) * m**(-1) * mdot**(-2) * rstar**(3/2) * A**(-4) * B**6 * D * E*E * Q**(-2)
+    return(rho_0)
+
+def rho_0_NT_Middle(r, MBH, spin, mdot, alpha):
+    M=MBH * G /(c*c)
+    m=MBH/MSun
+    rstar=(r/M)
+    y=np.sqrt(r/M)
+
+    A=A_fn(y, spin)
+    B=B_fn(y, spin)
+    D=D_fn(y, spin)
+    E=E_fn(y, spin)
+    Q=Q_fn(y, MBH, spin)
+
+    rho_0 = 4e1 * alpha**(-7/10) * m**(-7/10) * mdot**(2/5) * rstar**(-33/20) * A**(-1) * B**(3/5) * D**(-1/5) * E**(1/2) * Q**(2/5)
+    return(rho_0)
+
+def rho_0_NT_Outer(r, MBH, spin, mdot, alpha):
+    M=MBH * G /(c*c)
+    m=MBH/MSun
+    rstar=(r/M)
+    y=np.sqrt(r/M)
+
+    A=A_fn(y, spin)
+    B=B_fn(y, spin)
+    D=D_fn(y, spin)
+    E=E_fn(y, spin)
+    Q=Q_fn(y, MBH, spin)
+
+    rho_0 = 4e2 * alpha**(-7/10) * m**(-7/10) * mdot**(11/20) * rstar**(-15/8) * A**(-17/20) * B**(3/10) * D**(-11/40) * E**(17/40) * Q**(11/20)
     return(rho_0)
 
 #Eqns from Krolik 1999 to check where transition between inner and outer SS (and thereby NT) disc equations is
@@ -237,6 +285,19 @@ def R_tr(y, MBH, spin, eps, le, alpha):
     R_term = rR**(6/7) * rZ**(-10/21) * rT**(-2/21)
     rTR=340 * M * L_term * M_term * R_term
     return rTR
+
+#Eqns from Grishin et al 2025 defining transitions between inner, middle and outer regions
+
+def R_inner_mid(r, MBH, mdot, alpha):
+    m=MBH/(1e8*MSun)
+    mdotprime=mdot*(1-r**(-1/2))
+    r_tr=449.842 * alpha**(2/21) * m**(2/21) * mdotprime**(16/21)
+    return(r_tr)
+
+def R_mid_outer(r, mdot):
+    mdotprime=mdot*(1-r**(-1/2))
+    r_tr=987.891 * mdotprime**(2/3)
+    return(r_tr)
 
 # Eqns to calculate GW frequency and when an EMRI enters the LISA band
 
@@ -295,6 +356,8 @@ def LISA_band_enter(t, y, m1, Gammas, Mbh, traps):
     return GWf-0.001
 LISA_band_enter.terminal = True
 LISA_band_enter.direction = 0
+
+#GW torque equations - from binary_formation_eqns_V8
 
 def compute_torque_GW(args, disk, M, Mbh):
     q = M / Mbh

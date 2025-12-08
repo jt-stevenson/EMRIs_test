@@ -19,7 +19,7 @@ warnings.filterwarnings('ignore')
 printing=True
 plotting=True
 type_II_computation = "conservative" 
-C=663176
+C=693163
 Spin=0.9
 
 Fixed=True
@@ -343,7 +343,7 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
             r1 = np.append(r1, r1[-1])
 
         t_final=t1[len(t1)-1]
-        r_final=r1[len(r1)-1]
+        # r_final=r1[len(r1)-1]
 
     rG=ct.G*Mbh*(1/(ct.c*ct.c))
 
@@ -416,9 +416,9 @@ def main():
 ################################################################################################
 if __name__ == '__main__':
     args=main()
-    mass_sec=np.genfromtxt("BHs_single_Zsun_rapid_nospin.dat",usecols=(0),skip_header=3,unpack=True)
-    mass_prim_vk = np.genfromtxt('Ng_catalog.txt', skip_header=1)
-    MBH, T = np.genfromtxt("SMBHmass_local_AGNlifetime_pairs.txt", unpack=True, skip_header=3)
+    mass_sec=np.genfromtxt("/Users/pmxks13/PhD/EMRIs_test/BHs_single_Zsun_rapid_nospin.dat",usecols=(0),skip_header=3,unpack=True)
+    mass_prim_vk = np.genfromtxt('/Users/pmxks13/PhD/EMRIs_test/Ng_catalog.txt', skip_header=1)
+    MBH, T = np.genfromtxt("/Users/pmxks13/PhD/EMRIs_test/SMBHmass_local_AGNlifetime_pairs.txt", unpack=True, skip_header=3)
 ################################################################################################
 
 ################################################################################################
@@ -427,11 +427,11 @@ if __name__ == '__main__':
     if printing == True:
         date_time = start.strftime("%y%m%d_%H%M%S")
 
-        dir_name = f"EMRIs_Jupiter_2/c_{C}/{args.DT}/alpha_{args.a}/"
+        dir_name = f"/Users/pmxks13/PhD/EMRIs_test/EMRIs_Jupiter_2/c_{C}/{args.DT}/alpha_{args.a}/"
         if not os.path.exists(dir_name):
             os.makedirs(dir_name)
-        file_name = dir_name+f"/EMRIs_{args.TT}_{args.gen}_{args.N}_events_with_GW.txt"
-        file_name_1g = dir_name+f"/EMRIs_{args.TT}_1g_{args.N}_events_with_GW.txt"
+        file_name = dir_name+f"/EMRIs_{args.TT}_{args.gen}_{args.N}_events_with_GW_2.txt"
+        file_name_1g = dir_name+f"/EMRIs_{args.TT}_1g_{args.N}_events_with_GW_2.txt"
         if args.gen=='Ng' and  not os.path.exists(file_name_1g):
             print()
             print('There is no 1g source for this Ng simulation. Run the same simulation for 1g first!')
