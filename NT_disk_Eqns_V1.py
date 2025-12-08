@@ -122,6 +122,21 @@ def H_NT(r, MBH, spin, mdot):
     H = 1e5 * mdot * A**2 * B**(-3) * C**(1/2) * D**(-1) * E**(-1) * Q #in cms
     return H
 
+def H_NT_2(r, MBH, spin, mdot):
+    M=MBH * G /(c*c)
+    m=MBH/MSun
+    y=np.sqrt(r/M)
+    
+    A=A_fn(y, spin)
+    B=B_fn(y, spin)
+    C=C_fn(y, spin)
+    D=D_fn(y, spin)
+    E=E_fn(y, spin)
+    Q=Q_fn(y, MBH, spin)
+
+    H = 1e5 * mdot * m * A**2 * B**(-3) * C**(1/2) * D**(-1) * E**(-1) * Q #in cms
+    return H
+
 def H_NT_Middle(r, MBH, spin, mdot, alpha):
     M=MBH * G /(c*c)
     m=MBH/MSun
