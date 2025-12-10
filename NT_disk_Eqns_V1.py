@@ -314,6 +314,12 @@ def R_mid_outer(r, mdot):
     r_tr=987.891 * mdotprime**(2/3)
     return(r_tr)
 
+def R_outer_AGN(r, MBH, mdot, alpha):
+    m=MBH/(1e8*MSun)
+    mdotprime=mdot*(1-r**(-1/2))
+    r_tr=580.65 * alpha**(28/45) * m**(-52/45) * mdotprime**(-22/45)
+    return(r_tr)
+
 # Eqns to calculate GW frequency and when an EMRI enters the LISA band
 
 def GW_freq_fn(r, MBH, m):
