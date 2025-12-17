@@ -5,6 +5,8 @@ import multiprocessing
 import binary_formation_distribution_V8 as myscript
 from scipy.interpolate import interp1d
 
+from scipy.interpolate import UnivariateSpline
+
 c = 2.99792458e8  # m/s
 G = 6.67430e-11  # m^3 kg^-1 s^-2
 MSun = 1.98847e30  # kg
@@ -64,6 +66,7 @@ def Q_fn(y, MBH, spin):
     Q=Q0*(y - y0 - (3/2)*spin*np.log(y/y0) - term1 - term2 - term3)
     return Q
 
+#Surface Densities
 def Sigma_NT(r, MBH, spin, mdot, alpha):
     M=MBH * G /(c*c)
     rstar=(r/M)
@@ -108,7 +111,9 @@ def Sigma_NT_Outer(r, MBH, spin, mdot, alpha):
     sigma = (4e5) * alpha**(-4/5) * m**(1/5) * mdot**(7/10) * rstar**(-3/4) * A**(1/20) * B**(-4/5) * C**(1/2) * D**(-17/20) * E**(-1/20) * Q**(7/10)
     return(sigma)
 
+#Thicknesses
 def H_NT(r, MBH, spin, mdot):
+    #accurate to A+F
     M=MBH * G /(c*c)
     y=np.sqrt(r/M)
     
@@ -123,6 +128,7 @@ def H_NT(r, MBH, spin, mdot):
     return H
 
 def H_NT_2(r, MBH, spin, mdot):
+    #added factor of m like in Grishin et al 2025, seems to fix a scaling issue
     M=MBH * G /(c*c)
     m=MBH/MSun
     y=np.sqrt(r/M)
@@ -169,6 +175,7 @@ def H_NT_Outer(r, MBH, spin, mdot, alpha):
     H = 4e2 * alpha**(-1/10) * m**(18/20) * mdot**(3/20) * rstar**(9/8) * A**(19/20) * B**(-11/10) * C**(1/2) * D**(-23/40) * E**(-19/40) * Q**(3/20) #in cms
     return H
 
+#Temperatures
 def T_NT(r, MBH, spin, mdot, alpha):
     M=MBH * G /(c*c)
     m=MBH/MSun
@@ -209,6 +216,7 @@ def T_NT_Outer(r, MBH, spin, mdot, alpha):
     T = (2e8) * alpha**(-1/5) * m**(-1/5) * mdot**(3/10) * rstar**(-3/4) * A**(-1/10) * B**(-1/5) * D**(-1/5) * D**(-3/10) * Q**(3/5)
     return(T)
 
+#Midplane Densities
 def rho_0_NT(r, MBH, spin, mdot, alpha):
     M=MBH * G /(c*c)
     m=MBH/MSun
@@ -253,6 +261,138 @@ def rho_0_NT_Outer(r, MBH, spin, mdot, alpha):
 
     rho_0 = 4e2 * alpha**(-7/10) * m**(-7/10) * mdot**(11/20) * rstar**(-15/8) * A**(-17/20) * B**(3/10) * D**(-11/40) * E**(17/40) * Q**(11/20)
     return(rho_0)
+
+#Irradiance
+def F_NT(r, MBH, spin, mdot):
+    #Same for inner, mid and outer regions
+    M=MBH * G /(c*c)
+    m=MBH/MSun
+    rstar=(r/M)
+    y=np.sqrt(r/M)
+
+    B=B_fn(y, spin)
+    C=C_fn(y, spin)
+    Q=Q_fn(y, MBH, spin)
+
+    output = 7e26 * m**(-1) * mdot * rstar**(-3) * B**(-1) * C**(-1/2) * Q #in erg cm^-2 s^-1
+    return output
+
+# Radiation Pressure
+def Beta_NT(r, MBH, spin, mdot, alpha):
+    M=MBH * G /(c*c)
+    m=MBH/MSun
+    rstar=(r/M)
+    y=np.sqrt(r/M)
+
+    A=A_fn(y, spin)
+    B=B_fn(y, spin)
+    C=C_fn(y, spin)
+    D=D_fn(y, spin)
+    E=E_fn(y, spin)
+    Q=Q_fn(y, MBH, spin)
+
+    output = 4e-6 * alpha**(-1/4) * m**(-1/4) * mdot**(-2) * rstar**(21/8) * A**(-5/2) * B**(9/2) * D * E**(5/4) * Q**(-2) #unitless
+    beta = output/(1+output)
+    return beta
+
+def Beta_NT_Middle(r, MBH, spin, mdot, alpha):
+    M=MBH * G /(c*c)
+    m=MBH/MSun
+    rstar=(r/M)
+    y=np.sqrt(r/M)
+
+    A=A_fn(y, spin)
+    B=B_fn(y, spin)
+    C=C_fn(y, spin)
+    D=D_fn(y, spin)
+    E=E_fn(y, spin)
+    Q=Q_fn(y, MBH, spin)
+
+    output = 7e-3 * alpha**(-1/10) * m**(-1/10) * mdot**(-4/5) * rstar**(21/20) * A**(-1) * B**(9/5) * D**(2/5) * E**(1/2) * Q**(-4/5) #unitless
+    beta = output/(1+output)
+    return beta
+
+def Beta_NT_Outer(r, MBH, spin, mdot, alpha):
+    M=MBH * G /(c*c)
+    m=MBH/MSun
+    rstar=(r/M)
+    y=np.sqrt(r/M)
+
+    A=A_fn(y, spin)
+    B=B_fn(y, spin)
+    C=C_fn(y, spin)
+    D=D_fn(y, spin)
+    E=E_fn(y, spin)
+    Q=Q_fn(y, MBH, spin)
+
+    output = 3 * alpha**(-1/10) * m**(-1/10) * mdot**(-7/10) * rstar**(3/8) * A**(-11/20) * B**(9/10) * D**(7/40) * E**(11/40) * Q**(-7/20) #unitless
+    beta = output/(1+output)
+    return beta
+
+# Optical Depth Equations
+def Tau_NT(r, MBH, spin, mdot, alpha):
+    M=MBH * G /(c*c)
+    m=MBH/MSun
+    rstar=(r/M)
+    y=np.sqrt(r/M)
+
+    A=A_fn(y, spin)
+    B=B_fn(y, spin)
+    C=C_fn(y, spin)
+    D=D_fn(y, spin)
+    E=E_fn(y, spin)
+    Q=Q_fn(y, MBH, spin)
+
+    output = 1e-4 * alpha**(-17/16) * m**(-1/16) * mdot**(-2) * rstar**(93/32) * A**(-25/8) * B**(41/8) * C**(1/2) * D**(1/2) * E**(25/16) * Q**(-2) #unitless
+    tau_ff_tau_es=output**2
+    return tau_ff_tau_es
+
+def Tau_NT_Middle(r, MBH, spin, mdot):
+    M=MBH * G /(c*c)
+    rstar=(r/M)
+    y=np.sqrt(r/M)
+
+    A=A_fn(y, spin)
+    B=B_fn(y, spin)
+    D=D_fn(y, spin)
+    E=E_fn(y, spin)
+    Q=Q_fn(y, MBH, spin)
+
+    output = 2e-6 * mdot**(-1) * rstar**(3/2) * A**(-1) * B**(2) * D**(1/2) * E**(1/2) * Q**(-1) #in units
+    tau_ff_div_tau_es=output
+    return tau_ff_div_tau_es
+
+def Tau_NT_Outer(r, MBH, spin, mdot):
+    M=MBH * G /(c*c)
+    rstar=(r/M)
+    y=np.sqrt(r/M)
+
+    A=A_fn(y, spin)
+    B=B_fn(y, spin)
+    D=D_fn(y, spin)
+    E=E_fn(y, spin)
+    Q=Q_fn(y, MBH, spin)
+
+    output = 2e-3 * mdot**(-1/2) * rstar**(3/4) * A**(-1/2) * B**(2/5) * D**(1/4) * E**(1/4) * Q**(-1/2) #in units
+    tau_ff_div_tau_es=output
+    return tau_ff_div_tau_es
+
+def Template_NT(r, MBH, spin, mdot, alpha):
+    # Template NT function to make coding the rest of the equations easier
+    M=MBH * G /(c*c)
+    m=MBH/MSun
+    rstar=(r/M)
+    y=np.sqrt(r/M)
+
+    A=A_fn(y, spin)
+    B=B_fn(y, spin)
+    C=C_fn(y, spin)
+    D=D_fn(y, spin)
+    E=E_fn(y, spin)
+    Q=Q_fn(y, MBH, spin)
+
+    output = alpha**(1) * m**(1) * mdot**(1) * rstar**(1) * A**(1) * B**(1) * C**(1) * D**(1) * E**(1) * Q**(1) #in units
+    return output
 
 #Eqns from Krolik 1999 to check where transition between inner and outer SS (and thereby NT) disc equations is
 #And if our assumption is valid only using inner equations
@@ -399,7 +539,6 @@ def compute_noGW_torque(args, disk, M, Mbh):
     q = M / Mbh
     
     Gamma_0 = myscript.gamma_0(q, disk.h / disk.R, 2 * disk.rho * disk.h, disk.R, disk.Omega)
-    Gamma_GW = myscript.gamma_GW(disk.R, M, Mbh)
 
     dSig = myscript.dSigmadR(disk)
     dT = myscript.dTdR(disk)
@@ -409,12 +548,80 @@ def compute_noGW_torque(args, disk, M, Mbh):
     Gamma_I_jm17 = cI_jm17*Gamma_0
 
     if args.TT=="B16": 
-        return Gamma_I_p10 #+ Gamma_GW
+        return Gamma_I_p10
     elif args.TT=="G23": 
         gamma = 5/3
         Gamma_therm = myscript.gamma_thermal(gamma, disk, q)*Gamma_0
-        return Gamma_therm + Gamma_I_jm17 #+ Gamma_I_p10 + Gamma_GW
+        return Gamma_therm + Gamma_I_jm17
 
 def compute_noGW_torque_function(args, disk, M, Mbh):
     Gamma_tot = compute_noGW_torque(args, disk, M, Mbh)
     return interp1d(disk.R, Gamma_tot, kind='linear', fill_value='extrapolate')
+
+# Headwind Torque Eqns from Pan and Yang 2021
+
+def drhodR(obj):
+    rlog10 = np.log10(obj.R)  # descrete
+    rholog10 = np.log10(obj.rho)  # descrete
+    rholog10_spline = UnivariateSpline(rlog10, rholog10, k=3, ext=0)  # need scipy ver 1.10.0
+    drhodR_spline = rholog10_spline.derivative()
+    drhodR = drhodR_spline(rlog10)
+    return drhodR
+
+def gamma_rho(obj, mdot_gas, mbh):
+    drhodr=drhodR(obj)
+    h=obj.h
+    cs=obj.cs
+    r=obj.R
+    deltav=h*cs*(3-drhodr)/2
+    gamma_wind=-r * deltav * mdot_gas * (1/mbh)
+    return gamma_wind
+
+def compute_torque_wind(disk, mdot, mbh):
+    Gamma_wind = gamma_rho(disk, mdot, mbh)
+    return Gamma_wind
+
+def dJdR(obj, J):
+    rlog10 = np.log10(obj.R)  # descrete
+    Jlog10 = np.log10(J)  # descrete
+    Jlog10_spline = UnivariateSpline(rlog10, Jlog10, k=3, ext=0)  # need scipy ver 1.10.0
+    dJdR_spline = Jlog10_spline.derivative()
+    dJdR = dJdR_spline(rlog10)
+    return dJdR
+
+def BHL_accretion(args, obj, MBH, mbh, Mdot):
+    drhodr=drhodR(obj)
+
+    M=MBH * G /(c*c)
+    
+    h=obj.h
+    cs=obj.cs
+    r=obj.R
+    rho=obj.rho
+    sigma= 2*h*rho
+
+    deltav_psi=h*cs*(3-drhodr)/2
+    deltav_dr=3/2 * (mbh/(3*MBH))**(1/3) * (1/h) * cs
+
+    vgas=-Mdot/(2 * np.pi * r * sigma)
+    vstar=-1.3e-6 * (mbh/(10*MSun))/(MBH/(1e5*MSun)) * (r/10*M)**(-3)
+
+    deltav_r=np.abs(vgas-vstar)
+    vrel=((deltav_psi + deltav_dr)**2 + deltav_r**2)**(1/2)
+    mdot_BHL= (4 * np.pi * rho * mbh * mbh) / (vrel**2 + cs**2)**(3/2)
+    return mdot_BHL
+
+def BHL_accretion2(args, obj, MBH, mbh, mdot):
+    alpha=args.a
+    r=obj.R
+    M=MBH * G /(c*c)
+
+    mdot_BHL= 1.5e-7 * (alpha/0.1)**(-1) * (mdot/0.1)**5 * (MBH/(1e5*MSun))**(-1) * mbh/(10*MSun) * (r/(10*M))**6
+    return mdot_BHL
+
+
+#Eddington Luminosity Eqn - pAGN paper
+def Ledd(MBH, X):
+    kappa=0.2 * (1+X)
+    Ledd= (4 * np.pi * G * MBH * c) /kappa
+    return Ledd

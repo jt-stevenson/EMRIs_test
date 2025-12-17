@@ -19,7 +19,7 @@ warnings.filterwarnings('ignore')
 printing=False
 plotting=True
 type_II_computation = "conservative" 
-C=693163
+C=17205
 Spin=0.9
 
 Fixed=True
@@ -84,10 +84,22 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk):
     # Gammas_GW=np.array(Gammas_GW)
     # Gammas_noGW=np.array(Gammas_noGW)
 
-    mean_Gamma = myscript.compute_torque(args, disk, Mmean, Mbh)
+    ledd=jscript.Ledd(Mmean, X=0.7)
+    Ledd=jscript.Ledd(Mbh, X=0.7)
+
+    le=0.1
+    eps=0.1
+
+    mdot=le * ledd / eps
+    Mdot=0.5 * Ledd / eps
+    
     mean_Gamma_GW = jscript.compute_torque_GW(args, disk, Mmean, Mbh)
     mean_Gamma_noGW=jscript.compute_noGW_torque(args, disk, Mmean, Mbh)
-    # mean_Gamma = mean_Gamma_GW+mean_Gamma_noGW
+
+    mbhl=jscript.BHL_accretion2(args, disk, Mbh, Mmean, Mdot)
+
+    mean_Gamma_wind=10**7 * jscript.compute_torque_wind(disk, mbhl, Mmean)
+    mean_Gamma = mean_Gamma_GW+mean_Gamma_noGW+mean_Gamma_wind
 
     traps = myscript.mig_trap(disk, mean_Gamma_noGW) 
     traps=np.array(traps)/Rsch
@@ -128,6 +140,18 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk):
         elif np.all(G_seg < 0):
             ax.plot(R_seg, np.abs(G_seg), 'k--', label='$|\Gamma_{typeI}| <0$' if i == 0 else "", color='royalblue')
 
+    sign_changes4 = np.where(np.diff(np.sign(mean_Gamma_wind)) != 0)[0]
+    split_indices4 = np.concatenate(([0], sign_changes4 + 1, [len(Rs)]))
+
+    for i in range(len(split_indices4) - 1):
+        start, end = split_indices4[i], split_indices4[i + 1]
+        R_seg = Rs[start:end] *2
+        G_seg = mean_Gamma_wind[start:end]
+        if np.all(G_seg > 0):
+            ax.plot(R_seg, np.abs(G_seg), 'k-', label='$|\Gamma_{GW}| >0$' if i == 1 else "", color='mediumorchid')
+        elif np.all(G_seg < 0):
+            ax.plot(R_seg, np.abs(G_seg), 'k--', label='$|\Gamma_{GW}| <0$' if i == 0 else "", color='mediumorchid')
+
     sign_changes = np.where(np.diff(np.sign(mean_Gamma)) != 0)[0]
     split_indices = np.concatenate(([0], sign_changes + 1, [len(Rs)]))
 
@@ -146,11 +170,11 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk):
     ax.set_yscale('log')
     ax.set_xlabel(r'R [R$_{\rm g}$]')
     ax.set_ylabel(r'$|\Gamma|$ [cgs]')
-    ax.set_ylim([1e29,1e44])
+    # ax.set_ylim([1e29,1e44])
     ax.set_title(f'Migration Torques ($SMBH = 10^{MBH_power:.1f}$'r'${M_{\odot}})$')
     ax.legend()
     plt.tight_layout()
-    plt.savefig(f'Torques/Mbh_{np.log10(Mbh/ct.MSun):.1f}_alpha_{args.a}_{args.DT}_{args.TT}_{args.gen}_2.pdf', format='pdf', dpi=300)
+    plt.savefig(f'Torques/Mbh_{np.log10(Mbh/ct.MSun):.1f}_alpha_{args.a}_{args.DT}_{args.TT}_{args.gen}_with_wind_bhl_2.pdf', format='pdf', dpi=300)
     return
 
 ################################################################################################

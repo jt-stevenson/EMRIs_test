@@ -1,8 +1,9 @@
-# ignore .txt files
+# ignoring various plots and input/output files
 *.txt
 *.pdf
 *.dat
 *.png
+*.csv
 
 #ignore output files in their own subdirectories
 EMRIs/
@@ -11,3 +12,4 @@ flagged_EMRIs/
 EMRIs_Jupiter/
 outputs/
 
+Thompson_edited.py
