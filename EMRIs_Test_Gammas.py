@@ -24,6 +24,8 @@ Spin=0.9
 
 Fixed=True
 
+winds=True
+
 import binary_formation_distribution_V8 as myscript
 import NT_disk_Eqns_V1 as jscript
 
@@ -41,8 +43,8 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk):
         c = np.random.randint(0, len(MBH))
         spin=np.random.rand()
     if Fixed==True:
-        c=C
-        spin=Spin
+        c=args.c
+        spin=args.spin
     
     Mbh = MBH[c] * ct.MSun    # M_SMBH
     T = T[c] * 1e6 * ct.yr           # disk lifetime
@@ -53,6 +55,10 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk):
         Rmin = disk.Rmin
         Rmax = disk.Rmax
     elif args.DT  == "TQM":
+        # R_G=MBH * ct.G /(ct.c*ct.c)
+        # Rout=1e7*R_G
+        # sigma = (200 * 1e3) * (MBH / (1.3e8*ct.MSun)) ** (1 / 4.24)
+        # Mdot_out = 320*(ct.MSun/ct.yr)*(Rout/(95*ct.pc)) * (sigma/(188e3))**2
         disk = pagn.ThompsonAGN(Mbh=Mbh, Mdot_out=None)
         Rmin = disk.Rin
         Rmax = disk.Rout
@@ -61,55 +67,36 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk):
 
     Rsch = 2 * ct.G * Mbh / ct.c**2
     Rs = disk.R / Rsch
-    Gammas = []
-    # Gammas_GW=[]
-    # Gammas_noGW=[]
 
     Mmean=np.mean(mass_sec) * ct.MSun
 
-    # for i in range(0, len(mass_sec)):
-    #     print(f'Mass {i}/{len(mass_sec)}    ', end="\r")
-    #     M=mass_sec[i]
-    #     m1=M*ct.MSun
-        
-    #     Gamma = myscript.compute_torque_function(args, disk, m1, Mbh)
-    #     # Gamma_GW = jscript.compute_GW_torque_function(args, disk, m1, Mbh)
-    #     # Gamma_no_GW=jscript.compute_noGW_torque_function(args, disk, m1, Mbh)
-
-    #     Gammas.append(Gamma)
-        # Gammas_GW.append(Gamma_GW)
-        # Gammas_noGW.append(Gamma_no_GW)
-
-    # Gammas = np.array(Gammas)
-    # Gammas_GW=np.array(Gammas_GW)
-    # Gammas_noGW=np.array(Gammas_noGW)
 
     ledd=jscript.Ledd(Mmean, X=0.7)
     Ledd=jscript.Ledd(Mbh, X=0.7)
 
-    le=0.1
+    le=1
     eps=0.1
 
-    mdot=le * ledd / eps
-    Mdot=0.5 * Ledd / eps
+    mdot=le * ledd / (eps * ct.c*ct.c)
+    Mdot=le * Ledd / (eps * ct.c*ct.c)
     
     mean_Gamma_GW = jscript.compute_torque_GW(args, disk, Mmean, Mbh)
     mean_Gamma_noGW=jscript.compute_noGW_torque(args, disk, Mmean, Mbh)
 
-    mbhl=jscript.BHL_accretion2(args, disk, Mbh, Mmean, Mdot)
+    if winds==True:
+        mbhl=jscript.BHL_accretion(args, disk, Mbh, Mmean, Mdot)
+        print(mbhl)
 
-    mean_Gamma_wind=10**7 * jscript.compute_torque_wind(disk, mbhl, Mmean)
-    mean_Gamma = mean_Gamma_GW+mean_Gamma_noGW+mean_Gamma_wind
+        mean_Gamma_wind=10**7  * jscript.compute_torque_wind(disk, mbhl, Mmean)
+        mean_Gamma = mean_Gamma_GW+mean_Gamma_noGW+mean_Gamma_wind
+    else:
+        mean_Gamma = mean_Gamma_GW+mean_Gamma_noGW
 
     traps = myscript.mig_trap(disk, mean_Gamma_noGW) 
     traps=np.array(traps)/Rsch
-    
-    # min_Gamma = np.min(Gammas)
-    # max_Gamma = np.max(Gammas)
 
     fig, ax = plt.subplots(figsize=(8, 6))
 
-    # ax.fill_between(Rs, np.abs(min_Gamma), np.abs(max_Gamma), alpha=0.3, label='Migrator mass range', color='rebeccapurple')
     for trap in traps:
         ax.axvline(trap *2, color='gray', linestyle=':', linewidth=1, label='Migration trap' if trap == traps[0] else "")
 
@@ -139,18 +126,18 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk):
             ax.plot(R_seg, np.abs(G_seg), 'k-', label='$|\Gamma_{typeI}| >0$' if i == 1 else "", color='royalblue')
         elif np.all(G_seg < 0):
             ax.plot(R_seg, np.abs(G_seg), 'k--', label='$|\Gamma_{typeI}| <0$' if i == 0 else "", color='royalblue')
+    if winds==True:
+        sign_changes4 = np.where(np.diff(np.sign(mean_Gamma_wind)) != 0)[0]
+        split_indices4 = np.concatenate(([0], sign_changes4 + 1, [len(Rs)]))
 
-    sign_changes4 = np.where(np.diff(np.sign(mean_Gamma_wind)) != 0)[0]
-    split_indices4 = np.concatenate(([0], sign_changes4 + 1, [len(Rs)]))
-
-    for i in range(len(split_indices4) - 1):
-        start, end = split_indices4[i], split_indices4[i + 1]
-        R_seg = Rs[start:end] *2
-        G_seg = mean_Gamma_wind[start:end]
-        if np.all(G_seg > 0):
-            ax.plot(R_seg, np.abs(G_seg), 'k-', label='$|\Gamma_{GW}| >0$' if i == 1 else "", color='mediumorchid')
-        elif np.all(G_seg < 0):
-            ax.plot(R_seg, np.abs(G_seg), 'k--', label='$|\Gamma_{GW}| <0$' if i == 0 else "", color='mediumorchid')
+        for i in range(len(split_indices4) - 1):
+            start, end = split_indices4[i], split_indices4[i + 1]
+            R_seg = Rs[start:end] *2
+            G_seg = mean_Gamma_wind[start:end]
+            if np.all(G_seg > 0):
+                ax.plot(R_seg, np.abs(G_seg), 'k-', label='$|\Gamma_{wind}| >0$' if i == 1 else "", color='mediumorchid')
+            elif np.all(G_seg < 0):
+                ax.plot(R_seg, np.abs(G_seg), 'k--', label='$|\Gamma_{wind}| <0$' if i == 0 else "", color='mediumorchid')
 
     sign_changes = np.where(np.diff(np.sign(mean_Gamma)) != 0)[0]
     split_indices = np.concatenate(([0], sign_changes + 1, [len(Rs)]))
@@ -170,11 +157,14 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk):
     ax.set_yscale('log')
     ax.set_xlabel(r'R [R$_{\rm g}$]')
     ax.set_ylabel(r'$|\Gamma|$ [cgs]')
-    # ax.set_ylim([1e29,1e44])
+    # ax.set_ylim([1e25,1e44])
     ax.set_title(f'Migration Torques ($SMBH = 10^{MBH_power:.1f}$'r'${M_{\odot}})$')
     ax.legend()
     plt.tight_layout()
-    plt.savefig(f'Torques/Mbh_{np.log10(Mbh/ct.MSun):.1f}_alpha_{args.a}_{args.DT}_{args.TT}_{args.gen}_with_wind_bhl_2.pdf', format='pdf', dpi=300)
+    if args.DT  == "TQM":
+        plt.savefig(f'Torques/TQM/Mbh_{np.log10(Mbh/ct.MSun):.1f}_{args.DT}_{args.TT}_{args.gen}.pdf', format='pdf', dpi=300)
+    elif args.DT == "SG":
+        plt.savefig(f'Torques/Mbh_{np.log10(Mbh/ct.MSun):.1f}_alpha_{args.a}_{args.DT}_{args.TT}_{args.gen}.pdf', format='pdf', dpi=300)
     return
 
 ################################################################################################
@@ -182,11 +172,13 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk):
 ################################################################################################
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-DT', type=str, default="SG", choices=['SG', 'TQM'])
+    parser.add_argument('-DT', type=str, default="TQM", choices=['SG', 'TQM'])
     parser.add_argument('-TT', type=str, default="G23", choices=['B16', 'G23'])
     parser.add_argument('-gen', type=str, default='1g', choices=['1g', 'Ng'])
-    parser.add_argument('-a', type=float, default=0.01)    # real number
+    parser.add_argument('-a', type=float, default=0.1)    # real number
+    parser.add_argument('-spin', type=float, default=0.9)
     parser.add_argument('-N', type=int, default=5000) # integer number
+    parser.add_argument('-c', type=int, default=693163)
     parser.add_argument('-plot', action='store_true')      # truth value
     parser.add_argument('-date', action='store_true')      # truth value
     

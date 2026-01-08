@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from scipy.interpolate import interp1d
 from scipy.integrate import solve_ivp
 from scipy.optimize import fsolve
+from datetime import datetime
 from tqdm import tqdm
 
 start = datetime.now()
@@ -23,8 +24,71 @@ warnings.filterwarnings('ignore')
 ################################################################################################
 plotting = False
 printing = True
-type_II_computation = "conservative" 
+type_II_computation = "modified_type_I" 
 ##can be "conservative" or "conservative+extra_h_condition" or "modified_type_I"
+initialize_radius = 'capture_probability'
+##can be "log_uniform" or "capture_probability"
+
+################################################################################################
+### Capture timescale ##########################################################################
+################################################################################################
+def t_damp_hydro(radius, m1, h_ratio, Sigma_gas, M_SMBH):
+    #timescale for inclination and eccentricity damping
+    m1_arr = np.atleast_1d(m1).astype(float)
+
+    t_damp = np.zeros(m1_arr.size, dtype=float)
+    Omega=np.sqrt(ct.G * M_SMBH / radius**3) #s^-1
+    #draw initial inclination
+    cos_i = np.random.rand(m1_arr.size)
+    sin_i = np.sqrt(1.- cos_i**2.)
+    i_tilde = sin_i/h_ratio
+
+    ## from Rowan, MNRAS543,132–145(2025)
+    ## eq.46, fig. 8
+    R_Hill = radius * (m1/M_SMBH/3.)**(1./3.)
+    m_tilde = Sigma_gas * np.pi * R_Hill**2. / m1   #ambient Hill mass
+    
+    i_tilde_c = 4.6
+    A = 10.**(0.67 * np.log10(m_tilde) - 2.64 * np.log10(i_tilde_c) + 1.80)
+    B = 10.**(0.67 * np.log10(m_tilde) + 1.80)
+
+    #Delta i_tilde / i_tilde
+    Phi_high_inclination = B * i_tilde**(-2.64) 
+    Phi_low_inclination = A
+    Phi = np.where(i_tilde >= i_tilde_c, Phi_high_inclination, Phi_low_inclination)
+
+    #timescale
+    t_damp = np.where(i_tilde <=1, 0., (np.pi / Omega) * (1./Phi))
+    return t_damp
+
+def capture_processing(disk, M, Rmin, Rmax):
+    N=len(M)
+    r0 = np.zeros(N)
+    for i in range(N):
+        timescale_capture = t_damp_hydro(disk.R, M[i], disk.h/disk.R, 2*disk.rho*disk.h, disk.Mbh)
+        ##cap capture timescale on disk lifetime
+        ok = np.where(timescale_capture < args.T*ct.yr)[0]
+
+        ##weights = 1/t_capt
+        eps=1e-10
+        beta=1
+        w = 1. / np.maximum(timescale_capture[ok], eps) ** beta 
+        w_sum = w.sum()
+        p = w / w_sum
+
+        ##extract random index
+        j = np.random.choice(ok, p=p) 
+        r0[i] = disk.R[j]
+        """
+        while (r0[i]==0):
+            iter+=1
+            r_temp = 10**(np.log10(Rmin) + (np.log10(Rmax) - np.log10(Rmin)) * np.random.rand(1))
+            t_capt = np.interp(r_temp, disk.R, timescale_capture)
+            if (t_capt < args.T*ct.yr): ### Temporary
+                r0[i]=r_temp
+                break
+        """
+    return r0
 
 
 ################################################################################################
@@ -54,6 +118,15 @@ def gamma_ad(dSigmadR, dTdR):
 
 def dSigmadR(obj):
     Sigma = 2*obj.rho*obj.h # descrete
+    rlog10 = np.log10(obj.R)  # descrete
+    Sigmalog10 = np.log10(Sigma)  # descrete
+    Sigmalog10_spline = UnivariateSpline(rlog10, Sigmalog10, k=3, s=0.005, ext=0)  # need scipy ver 1.10.0
+    dSigmadR_spline =  Sigmalog10_spline.derivative()
+    dSigmadR = dSigmadR_spline(rlog10)
+    return dSigmadR
+
+def dSigmadR_reduced(obj, Sigma_reduced):
+    Sigma = Sigma_reduced # descrete
     rlog10 = np.log10(obj.R)  # descrete
     Sigmalog10 = np.log10(Sigma)  # descrete
     Sigmalog10_spline = UnivariateSpline(rlog10, Sigmalog10, k=3, s=0.005, ext=0)  # need scipy ver 1.10.0
@@ -104,9 +177,8 @@ def CI_p10(obj, dSigmadR, dTdR):
 
     return cI
 
-def CI_jm17_tot(dSigmadR, dTdR, gamma, obj):
-    cL = CL(dSigmadR, dTdR, gamma, obj)
-    cI = cL + (0.46 + 0.96*dSigmadR - 1.8*dTdR)/gamma
+def CI_jm17(dSigmadR, dTdR, gamma, obj):
+    cI = (0.46 + 0.96*dSigmadR - 1.8*dTdR)/gamma
     return cI
 
 
@@ -177,6 +249,21 @@ def gamma_GW(r, m, M, e=0.0, return_torque=True, use_reduced_mass=True):
     dL_dt = mu * sqrtGM * (term_a - term_e)
 
     return dL_dt
+
+def gamma_wind(m, disk, gamma):
+    ##from Zhen Pan, Huan Yang (2021), eq. 36
+    ##initially developed by Kocsis, Yunes, Loeb (2011)
+    h_ratio = disk.h / disk.R
+    delta_v_phi = (3. - gamma) / 2. * h_ratio * disk.cs #eq.39a
+    delta_v_dr = 1.5 * (m / (3. * disk.Mbh))**(1./ 3.) * h_ratio**(-1.) * disk.cs #eq. 39c
+    delta_v_r = 0.0 #assuming nearly-circular orbits
+    vrel2 = (delta_v_phi + delta_v_dr)**2 + delta_v_r**2
+    R_BHL = m / (vrel2 + disk.cs**2) #Bondi radius
+    mdot_BHL = 4.0 * np.pi * disk.rho * m**2. / (vrel2 + disk.cs**2.)**1.5 #Bondi accretion rate, eq.37
+    R_Hill = disk.R * (m / (3. * disk.Mbh))**(1./3.)
+    mdot_wind = mdot_BHL * np.minimum(1., np.minimum(disk.h/R_BHL, R_Hill/R_BHL))
+    dot_J = - disk.R * delta_v_phi * mdot_wind / m
+    return dot_J
 
 
 def mig_trap(disk, Gamma):
@@ -249,68 +336,106 @@ def load_file(filename):
 
 def compute_torque(args, disk, M, Mbh):
     q = M / Mbh
-    
-    Gamma_0 = gamma_0(q, disk.h / disk.R, 2 * disk.rho * disk.h, disk.R, disk.Omega)
-    Gamma_GW = gamma_GW(disk.R, M, Mbh)
 
-    dSig = dSigmadR(disk)
+    ## Kanagawa+2018 prescription
+    K= q**2 / disk.alpha  / (disk.h/disk.R)**5
+    Sigma_reduced = 1./(1.+0.04*K) * (2. * disk.rho * disk.h)
+    # NB the position of traps is now m dependent!!
+    # is it true that you only pair up at low K??
+    ##
+    
+    #Gamma_0 = gamma_0(q, disk.h / disk.R, 2 * disk.rho * disk.h, disk.R, disk.Omega)
+    Gamma_0 = gamma_0(q, disk.h / disk.R, Sigma_reduced, disk.R, disk.Omega)
+    Gamma_GW = gamma_GW(disk.R, M, Mbh)
+    Gamma_wind = gamma_wind(M, disk, 5/3)
+
+    dSig = dSigmadR_reduced(disk, Sigma_reduced)
     dT = dTdR(disk)
     cI_p10 = CI_p10(disk, dSig, dT)
     Gamma_I_p10 = cI_p10*Gamma_0
-    cI_jm17 = CI_jm17_tot(dSig, dT, 5/3, disk)
-    Gamma_I_jm17 = cI_jm17*Gamma_0
+    cI_jm17 = CI_jm17(dSig, dT, 5/3, disk)
+    cL = CL(dSig, dT, 5/3, disk)
+    Gamma_I_jm17 = (cL + cI_jm17)*Gamma_0
 
     if args.TT=="B16": 
-        return Gamma_I_p10 #+ Gamma_GW
+        return Gamma_I_p10 ##+ Gamma_GW
     elif args.TT=="G23": 
         gamma = 5/3
         Gamma_therm = gamma_thermal(gamma, disk, q)*Gamma_0
-        return Gamma_therm + Gamma_I_jm17 + Gamma_GW #+ Gamma_I_p10 + Gamma_GW
+        return Gamma_therm + Gamma_I_jm17 + Gamma_wind + Gamma_GW
 
 def compute_torque_function(args, disk, M, Mbh):
     Gamma_tot = compute_torque(args, disk, M, Mbh)
+    return interp1d(disk.R, Gamma_tot, kind='linear', fill_value='extrapolate')
+
+def compute_torque_pure_TypeI(args, disk, M, Mbh):
+    q = M / Mbh
+    
+    Gamma_0 = gamma_0(q, disk.h / disk.R, 2 * disk.rho * disk.h, disk.R, disk.Omega)
+    ##Gamma_GW = gamma_GW(disk.R, M, Mbh)
+
+    dSig = dSigmadR_reduced(disk, 2 * disk.rho * disk.h)
+    dT = dTdR(disk)
+    cI_p10 = CI_p10(disk, dSig, dT)
+    Gamma_I_p10 = cI_p10*Gamma_0
+    cI_jm17 = CI_jm17(dSig, dT, 5/3, disk)
+    cL = CL(dSig, dT, 5/3, disk)
+    Gamma_I_jm17 = (cL + cI_jm17)*Gamma_0
+
+    if args.TT=="B16": 
+        return Gamma_I_p10 ##+ Gamma_GW
+    elif args.TT=="G23": 
+        gamma = 5/3
+        Gamma_therm = gamma_thermal(gamma, disk, q)*Gamma_0
+        return Gamma_therm + Gamma_I_jm17 #+ Gamma_I_p10 ##+ Gamma_GW
+
+def compute_torque_function_pure_TypeI(args, disk, M, Mbh):
+    Gamma_tot = compute_torque_pure_TypeI(args, disk, M, Mbh)
     return interp1d(disk.R, Gamma_tot, kind='linear', fill_value='extrapolate')
     
 def rdot(t, y, M, Gamma, M_SMBH, traps):
     return (2*Gamma(y)) / M * np.sqrt(y / (ct.G*M_SMBH))
 
-def rdot_typeII(t, y, disk, alpha):
+def rdot_typeII(t, y, disk):
     # Γ = L/t_visc  ==>  ṙ = 2Γ/m √(r/GM) = -2ν/r
     # always negative ==> inward migration
     r = y[0]
     h = np.interp(r, disk.R, disk.h)
     cs = np.interp(r, disk.R, disk.cs)
-    nu = alpha * cs * h 
+    nu = disk.alpha * cs * h 
     return -2.0 * nu / r
 
-def rdot_typeII_Kanagawa2018(t, y, M, disk, M_SMBH, alpha):
+def rdot_typeII_Kanagawa2018(t, y, M, disk, M_SMBH):
     # just like rdot for Type I, but with reduced surface density
     r = float(y[0])
 
     q=M/M_SMBH
-    K= q**2 / alpha  / (disk.h/disk.R)**5
-    Sigma_reduced = 1./(1.+0.04*K) * (2. * disk.rho * disk.h)
+    K= q**2 / disk.alpha  / (disk.h/disk.R)**5
+    Sigma = 2. * disk.rho * disk.h
+    Sigma_reduced = 1./(1.+0.04*K) * Sigma
     # NB the position of traps is now m dependent!!
     # should also print K or gap depth (0.04*K/(1+0.04*K)) in outputs
     # is it true that you only pair up at low K??
     
     ### Computing torque
     Gamma_0 = gamma_0(q, disk.h / disk.R, Sigma_reduced, disk.R, disk.Omega)
-    #Gamma_GW = gamma_GW(disk.R, M, Mbh)
+    Gamma_0_background = gamma_0(q, disk.h / disk.R, Sigma, disk.R, disk.Omega)
 
     dSig = dSigmadR(disk)
     dT = dTdR(disk)
     cI_p10 = CI_p10(disk, dSig, dT)
     Gamma_I_p10 = cI_p10*Gamma_0
-    cI_jm17 = CI_jm17_tot(dSig, dT, 5/3, disk)
-    Gamma_I_jm17 = cI_jm17*Gamma_0
+    cI_jm17 = CI_jm17(dSig, dT, 5/3, disk)
+    gamma = 5/3
+    cL = CL(dSig, dT, gamma, disk)
+    Gamma_I_jm17 = cL*Gamma_0_background + cI_jm17*Gamma_0
 
     if args.TT=="B16": 
-        Gamma = Gamma_I_p10 #+ Gamma_GW
+        Gamma = Gamma_I_p10 ##+ Gamma_GW
     elif args.TT=="G23": 
         gamma = 5/3
         Gamma_therm = gamma_thermal(gamma, disk, q)*Gamma_0
-        Gamma = Gamma_therm + Gamma_I_jm17 #+ Gamma_GW + Gamma_I_p10
+        Gamma = Gamma_therm + Gamma_I_jm17 #+ Gamma_I_p10 ##+ Gamma_GW
     ###
 
     Gamma_of_r = interp1d(disk.R, Gamma, kind="linear", fill_value="extrapolate")
@@ -349,7 +474,7 @@ def pos_after_kick(r_init, mass_prim_vk, M_SMBH):
     
     return r_new
 
-def type_II_event(disk, M, Mbh, alpha, type_II_computation):
+def type_II_event(disk, M, Mbh):
     #Checks whether a BH of mass M opens a gap in the AGN disk
     q_array = M / Mbh
     h_array = disk.h / disk.R
@@ -364,11 +489,11 @@ def type_II_event(disk, M, Mbh, alpha, type_II_computation):
         r = y[0]
         h = h_of_r(r)
         q = q_array
-        return q - np.sqrt(alpha / 0.09) * h**5 #K>11
+        return q - np.sqrt(disk.alpha / 0.09) * h**5 #K>11
     viscous_event.terminal = False # doesn't stop integration
     viscous_event.direction = 1  # Trigger when q crosses threshold from below
 
-
+    
     # 2) The disk is thin enough 
     # from Bryden+99 and citations therein
     def thin_event(t, y, *fargs):
@@ -388,7 +513,7 @@ def type_II_event(disk, M, Mbh, alpha, type_II_computation):
         elif (type_II_computation == "conservative") or (type_II_computation == "modified_type_I"):
             v = viscous_event(t, y, *fargs)
             return -v 
-    gap_open_event.terminal = True # stops integration
+    gap_open_event.terminal = False # doesn't stop integration
     gap_open_event.direction = -1  # Trigger when h crosses threshold from above
     
     return gap_open_event
@@ -409,17 +534,6 @@ def iteration(Rmin, Rmax, args, mass_sec, mass_prim_vk, disk, Mbh, r_pu_1g):
     seed = (os.getpid() + int(time.time() * 1e6)) % 2**32
     np.random.seed(seed)
     
-    # time and initial radius
-    t0 = 0
-    r0 = 10**(np.log10(Rmin) + (np.log10(Rmax) - np.log10(Rmin)) * np.random.rand(2))
-    if args.gen=='Ng':
-        b = np.random.randint(0, len(r_pu_1g))
-        r1 = r_pu_1g[b]
-        r0[0] = pos_after_kick(r1, mass_prim_vk, Mbh)
-        if not np.isfinite(r0[0]):
-            r0[0]=Rmax+1e10
-    T = args.T * ct.yr
-    
     # primary and secondary mass
     a = np.random.randint(0,len(mass_sec),2)
     (m1,m2) = mass_sec[a]*ct.MSun
@@ -434,16 +548,35 @@ def iteration(Rmin, Rmax, args, mass_sec, mass_prim_vk, disk, Mbh, r_pu_1g):
     M = np.array([m1, m2]) if m1>m2 else np.array([m2, m1])
     #type II migration flag
     gap = np.full(M.shape, 'type_I', dtype='<U7')
+    K = np.zeros(M.shape)
 
-    # compute torque for both BHs
+    # time and initial radius
+    t0 = 0
+    if initialize_radius == 'log_uniform':
+        r0 = 10**(np.log10(Rmin) + (np.log10(Rmax) - np.log10(Rmin)) * np.random.rand(2))
+    elif initialize_radius == 'capture_probability':
+        r0 = capture_processing(disk, M, Rmin, Rmax) 
+        
+    if args.gen=='Ng':
+        b = np.random.randint(0, len(r_pu_1g))
+        r1 = r_pu_1g[b]
+        r0[0] = pos_after_kick(r1, mass_prim_vk, Mbh)
+        if not np.isfinite(r0[0]):
+            r0[0]=Rmax+1e10
+    T = args.T * ct.yr
+
+    # compute torque & trap locations for both BHs
     Gammas = [compute_torque_function(args, disk, M[i], Mbh) for i in range(2)]
-    
-    # compute trap locations for both BHs
     traps = [mig_trap(disk, Gamma(disk.R)) for Gamma in Gammas]
     
+    Gammas_pure_TypeI = [compute_torque_function_pure_TypeI(args, disk, M[i], Mbh) for i in range(2)]
+    traps_pure_TypeI = [mig_trap(disk, Gamma(disk.R)) for Gamma in Gammas_pure_TypeI]
+    
+     
     # type II migration in case of gap opening
     gap_event_1 = type_II_event(disk, M[0], Mbh) 
     gap_event_2 = type_II_event(disk, M[1], Mbh)
+
     # simulate trajectories until t>T or until r=r_trap
     solution1 = solve_ivp(fun=rdot, 
                           t_span=[t0, T], 
@@ -463,19 +596,20 @@ def iteration(Rmin, Rmax, args, mass_sec, mass_prim_vk, disk, Mbh, r_pu_1g):
                           rtol=1e-3,
                           atol=1e-9,
                           args=(M[1], Gammas[1], Mbh, traps[1]))
+    
 
 
+    ## check whether "events" happened (reaching Type I migration trap or doing Type II migration)
     t1 = solution1.t
     t2 = solution2.t
     r1 = solution1.y[0]
     r2 = solution2.y[0]
 
-    ## check whether "events" happened (reaching Type I migration trap or doing Type II migration)
     # if you open a gap
-    # keep integrating with Type II torque
+    # just print type II flag
     if len(solution1.t_events[1]) >0:
-        print("1 does type II")
         gap[0]='type_II'
+        """
         t_gap = solution1.t_events[1][0]
         r_gap = solution1.y_events[1][0][0]
         # Stage 2 : Type II migration
@@ -487,18 +621,19 @@ def iteration(Rmin, Rmax, args, mass_sec, mass_prim_vk, disk, Mbh, r_pu_1g):
             solution1_TypeII = solve_ivp(rdot_typeII_Kanagawa2018, [t_gap, T], [r_gap],
                                      args=(M[0], disk, Mbh,),
                                      first_step=1e3*ct.yr, rtol=1e-3, atol=0.0)
-        print("integration type II concluded")
         # Stitch the two segments 
         t1 = np.concatenate((t1, solution1_TypeII.t[1:]))     # skip duplicate t_gap
         r1 = np.concatenate((r1, solution1_TypeII.y[0][1:]))
+        """
     else:
         # if BH reached migration trap
         # extend trajectory until t=T
         if len(solution1.t_events[0])>0:
             t1 = np.append(t1, T)
             r1 = np.append(r1, r1[-1])
-    if len(solution2.t_events[1])>0:
+    if len(solution2.t_events[1]) >0:
         gap[1]='type_II'
+        """
         t_gap = solution2.t_events[1][0]
         r_gap = solution2.y_events[1][0][0]
         # Stage 2 : Type II migration
@@ -513,6 +648,7 @@ def iteration(Rmin, Rmax, args, mass_sec, mass_prim_vk, disk, Mbh, r_pu_1g):
         # Stitch the two segments 
         t2 = np.concatenate((t2, solution2_TypeII.t[1:]))     # skip duplicate t_gap
         r2 = np.concatenate((r2, solution2_TypeII.y[0][1:]))
+        """
     else:
         # if BH reached migration trap
         # extend trajectory until t=T
@@ -584,7 +720,13 @@ def iteration(Rmin, Rmax, args, mass_sec, mass_prim_vk, disk, Mbh, r_pu_1g):
         plt.tight_layout()
         plt.show()
     
-    return f"{r0[0]:.3e} {r0[1]:.3e} {M[0]:.3e} {M[1]:.3e} {r_pu:.3e} {t_pu:.3e} {paired} {gap[0]} {gap[1]} {Ng}\n"
+
+    #contrast parameter
+    h_of_r = interp1d(disk.R, disk.h/disk.R, bounds_error=False, fill_value="extrapolate")
+    h = h_of_r(r_pu)
+    K = (M / Mbh)**2 /disk.alpha /h**5
+
+    return f"{r0[0]:.3e} {r0[1]:.3e} {M[0]:.3e} {M[1]:.3e} {r_pu:.3e} {t_pu:.3e} {paired} {gap[0]} {gap[1]} {Ng} {K[0]} {K[1]}\n"
 ################################################################################################
 
 ################################################################################################
@@ -667,8 +809,8 @@ def main():
 ################################################################################################
 if __name__ == '__main__':
     args=main()
-    mass_sec=np.genfromtxt("BHs_single_Zsun_rapid_nospin.dat",usecols=(0),skip_header=3,unpack=True)
-    mass_prim_vk = np.genfromtxt('Ng_catalog.txt', skip_header=1)
+    mass_sec=np.genfromtxt("src/BHs_single_Zsun_rapid_nospin.dat",usecols=(0),skip_header=3,unpack=True)
+    mass_prim_vk = np.genfromtxt('src/Ng_catalog.txt', skip_header=1)
 ################################################################################################
 
 
@@ -697,7 +839,11 @@ if __name__ == '__main__':
 ### Computation of migration trap positions ####################################################
 ################################################################################################
     Torque = compute_torque(args, disk, np.mean(mass_sec) * ct.MSun, Mbh)
+    ##print(np.mean(mass_sec))
     traps = mig_trap(disk, Torque)
+
+    Torque = compute_torque_pure_TypeI(args, disk, np.mean(mass_sec) * ct.MSun, Mbh)
+    traps_pure_TypeI = mig_trap(disk, Torque)
 ################################################################################################
 
 ################################################################################################
@@ -715,10 +861,12 @@ if __name__ == '__main__':
     if printing == True:
         traps_str = ""
         for trap in traps: traps_str += f"{trap:.1e} "
+        traps_str_pure_TypeI = ""
+        for trap in traps_pure_TypeI: traps_str_pure_TypeI += f"{trap:.1e} "
 
         date_time = start.strftime("%y%m%d_%H%M%S")
 
-        dir_name = f"outputs/{args.DT}/alpha_{args.a}/Mbh_{args.M_SMBH:.1f}"
+        dir_name = f"outputs_V9/{args.DT}/alpha_{args.a}/Mbh_{args.M_SMBH:.1f}"
         if not os.path.exists(dir_name):
             os.makedirs(dir_name)
         file_name = dir_name+f"/pairup_radius_{args.TT}_{args.gen}.txt"
@@ -731,7 +879,7 @@ if __name__ == '__main__':
 
         # print all parameters in the file
         file.write(f"Parameters:\n")
-        file.write(f"version     = V8\n")
+        file.write(f"version     = V9\n")
         file.write(f"date_time   = {date_time}\n")
         file.write(f"comp_time   = {0}\n")
         file.write(f"disk_type   = {args.DT}\n")
@@ -744,9 +892,10 @@ if __name__ == '__main__':
         file.write(f"R_min       = {Rmin:.1e}\n")
         file.write(f"R_max       = {Rmax:.1e}\n")
         file.write(f"trap_rad    = {traps_str}\n")
+        file.write(f"trap_rad_TypeI    = {traps_str_pure_TypeI}\n")
         file.write(f"\n")
         file.write(f"Data:\n")
-        file.write(f"r_1       r_2       m_1       m_2       r_pu      t_pu      paired      migration_1      migration_2      Ng_1\n")
+        file.write(f"r_1       r_2       m_1       m_2       r_pu      t_pu      paired      migration_1      migration_2      Ng_1      K_1      K_2\n")
 ################################################################################################
 
 

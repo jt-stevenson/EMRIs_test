@@ -24,7 +24,7 @@ Spin=0.9
 
 Fixed=True
 
-import binary_formation_distribution_V8 as myscript
+import binary_formation_distribution_V8 as myscript #edited to explicitly take alpha instead of disc.alpha
 import NT_disk_Eqns_V1 as jscript
 
 ################################################################################################
@@ -41,8 +41,8 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
         c = np.random.randint(0, len(MBH))
         spin=np.random.rand()
     if Fixed==True:
-        c=C
-        spin=Spin
+        c=args.c
+        spin=args.spin
     
     Mbh = MBH[c] * ct.MSun    # M_SMBH
     T = T[c] * 1e6 * ct.yr           # disk lifetime
@@ -53,11 +53,21 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
         Rmin = disk.Rmin
         Rmax = disk.Rmax
     elif args.DT  == "TQM":
-        disk = pagn.ThompsonAGN(Mbh=Mbh, Mdot_out=None)
+        Rout=1e7 * 2 * ct.G * Mbh/ct.c**2
+        sigma = (200 * 1e3) * (Mbh / (1.3e8*ct.MSun)) ** (1 / 4.24)
+        Mdot_out = 320*(ct.MSun/ct.yr)*(Rout/(95*ct.pc)) * (sigma/(188e3))**2
+        disk = pagn.ThompsonAGN(Mbh=Mbh, Mdot_out=Mdot_out)
         Rmin = disk.Rin
         Rmax = disk.Rout
         # print(disk.Mdot_out)
     disk.solve_disk()
+
+    if args.DT  == "TQM":
+        ledd=jscript.Ledd(Mbh, X=0.7)
+        Mdot= ledd /(ct.c**2 * 0.1)
+        alpha=Mdot/(6*np.pi * disk.h * disk.h * disk.rho * disk.cs)
+        alpha=np.mean(alpha)
+        print(f'alpha: {alpha}')
 
     # migrator mass
     a = np.random.randint(0,len(mass_sec),1)
@@ -143,7 +153,7 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
     Gammas_GW = jscript.compute_GW_torque_function(args, disk, m1, Mbh)
     Gammas_no_GW=jscript.compute_noGW_torque_function(args, disk, m1, Mbh)
 
-    gap_event_1 = myscript.type_II_event(disk, m1, Mbh)
+    gap_event_1 = myscript.type_II_event(disk, m1, Mbh, alpha, type_II_computation)
     R_event_1=jscript.r_isco_event(Mbh, m1, spin)
 
     print(f'SMBH {Mbh/ct.MSun:.3e} Msun and SBH {m1/ct.MSun:.3e} Msun, r0 {r0/Rg:.3e} Rg')
@@ -178,11 +188,11 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
         # Stage 2 : Type II migration
         if (type_II_computation == "conservative") or (type_II_computation == "conservative+extra_h_condition"):
             solution1_TypeII = solve_ivp(myscript.rdot_typeII, [t_gap, T], [r_gap],
-                                     args=(disk,),
+                                     args=(disk, alpha),
                                      first_step=1e3*ct.yr, rtol=1e-3, atol=0.0)
         elif type_II_computation == "modified_type_I":
             solution1_TypeII = solve_ivp(myscript.rdot_typeII_Kanagawa2018, [t_gap, T], [r_gap],
-                                     args=(M[0], disk, Mbh,),
+                                     args=(M[0], disk, Mbh, alpha),
                                      first_step=1e3*ct.yr, rtol=1e-3, atol=0.0)
         print("integration type II concluded")
         # Stitch the two segments 
@@ -363,6 +373,11 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
     elif t_lisa_exit!=0:
         t_lisa=t_lisa_entry-t_lisa_exit
 
+    r_isco=jscript.R_isco_function(Mbh, spin)
+
+    if r_final<r_isco:
+        r_final=r_isco
+
 
     # if lisa_flag!=0:
     #     print(f'EMRI with SMBH {MBH/ct.MSun:.3e} MSun, SBH {m1/ct.MSun:.3e} MSun, SMBH spin {spin:.3e} enters LISA band at {lisa_radii/rG:.3e} R_G')
@@ -399,11 +414,13 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
 ################################################################################################
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-DT', type=str, default="SG", choices=['SG', 'TQM'])
+    parser.add_argument('-DT', type=str, default="TQM", choices=['SG', 'TQM'])
     parser.add_argument('-TT', type=str, default="G23", choices=['B16', 'G23'])
     parser.add_argument('-gen', type=str, default='1g', choices=['1g', 'Ng'])
-    parser.add_argument('-a', type=float, default=0.01)    # real number
-    parser.add_argument('-N', type=int, default=5000) # integer number
+    parser.add_argument('-a', type=float, default=0.01)
+    parser.add_argument('-spin', type=float, default=0.9)    # real number
+    parser.add_argument('-N', type=int, default=5000)
+    parser.add_argument('-c', type=int, default=693163) # integer number
     parser.add_argument('-plot', action='store_true')      # truth value
     parser.add_argument('-date', action='store_true')      # truth value
     
@@ -427,11 +444,11 @@ if __name__ == '__main__':
     if printing == True:
         date_time = start.strftime("%y%m%d_%H%M%S")
 
-        dir_name = f"/Users/pmxks13/PhD/EMRIs_test/EMRIs_Jupiter_2/c_{C}/{args.DT}/alpha_{args.a}/"
+        dir_name = f"/Users/pmxks13/PhD/EMRIs_test/EMRIs_Jupiter_2/c_{args.c}/{args.DT}/alpha_{args.a}/"
         if not os.path.exists(dir_name):
             os.makedirs(dir_name)
-        file_name = dir_name+f"/EMRIs_{args.TT}_{args.gen}_{args.N}_events_with_GW_2.txt"
-        file_name_1g = dir_name+f"/EMRIs_{args.TT}_1g_{args.N}_events_with_GW_2.txt"
+        file_name = dir_name+f"/EMRIs_{args.TT}_{args.gen}_{args.N}_events_with_GW.txt"
+        file_name_1g = dir_name+f"/EMRIs_{args.TT}_1g_{args.N}_events_with_GW.txt"
         if args.gen=='Ng' and  not os.path.exists(file_name_1g):
             print()
             print('There is no 1g source for this Ng simulation. Run the same simulation for 1g first!')

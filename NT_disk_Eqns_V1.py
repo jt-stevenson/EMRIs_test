@@ -460,6 +460,27 @@ def R_outer_AGN(r, MBH, mdot, alpha):
     r_tr=580.65 * alpha**(28/45) * m**(-52/45) * mdotprime**(-22/45)
     return(r_tr)
 
+#Eqns derived from A+F NT Surface Density Profile Eqns
+
+def r_in_mid(y, MBH, spin, mdot, alpha):
+    M=MBH * G /(c*c)
+    m=MBH/MSun
+    A=A_fn(y, spin)
+    B=B_fn(y, spin)
+    D=D_fn(y, spin)
+    E=E_fn(y, spin)
+    Q=Q_fn(y, MBH, spin)
+
+    r_tr=(4.5e4)**(10/21) * (alpha**2 * m**2 * mdot**16 * A**20 * B**-38 * D**-8 * E**-10 * Q**16)**(1/21)
+    return(r_tr)
+
+def r_mid_outer(y, MBH, spin, mdot):
+    A=A_fn(y, spin)
+    D=D_fn(y, spin)
+    Q=Q_fn(y, MBH, spin)
+    r_tr=49**(20/3) * mdot**(2/3) * A**(2/3) * D**(-1/3) * Q**(2/3)
+    return(r_tr)
+
 # Eqns to calculate GW frequency and when an EMRI enters the LISA band
 
 def GW_freq_fn(r, MBH, m):
@@ -592,13 +613,14 @@ def dJdR(obj, J):
 def BHL_accretion(args, obj, MBH, mbh, Mdot):
     drhodr=drhodR(obj)
 
-    M=MBH * G /(c*c)
+    M = MBH * G /(c*c)
     
-    h=obj.h
-    cs=obj.cs
-    r=obj.R
-    rho=obj.rho
-    sigma= 2*h*rho
+    h = obj.h
+    cs = obj.cs
+    r = obj.R
+    rho = obj.rho
+    sigma = 2*h*rho
+    h = obj.h / r
 
     deltav_psi=h*cs*(3-drhodr)/2
     deltav_dr=3/2 * (mbh/(3*MBH))**(1/3) * (1/h) * cs
@@ -616,7 +638,7 @@ def BHL_accretion2(args, obj, MBH, mbh, mdot):
     r=obj.R
     M=MBH * G /(c*c)
 
-    mdot_BHL= 1.5e-7 * (alpha/0.1)**(-1) * (mdot/0.1)**5 * (MBH/(1e5*MSun))**(-1) * mbh/(10*MSun) * (r/(10*M))**6
+    mdot_BHL= 1.5e-7 * (alpha/0.1)**(-1) * (mdot/0.1)**(-5) * (MBH/(1e5*MSun))**(-1) * mbh**2/(10*MSun) * (r/(10*M))**6
     return mdot_BHL
 
 
