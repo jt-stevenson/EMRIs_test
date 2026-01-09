@@ -311,10 +311,12 @@ class NovikovThorneAGN:
                 ax[i_param].axvline(x=self.r_mo, linestyle='--', color=cmap(0.4), alpha=0.5, label = r"$R_{outer}$")
             ax[-1].legend()
 
+        plt.suptitle(f'$SMBH = 10^{power}'r'{M_{\odot}}, \alpha$ = 'f'{self.alpha},'r'$\chi$ = 'f'{self.spin}')
+        
         if save_to_file==True:
             if path==None:
                 raise ValueError('Please provide a path!')
             mypath=path
             plt.savefig(f'{mypath}all_profiles_with_TQM_smooth.pdf')
-        plt.suptitle(f'$SMBH = 10^{power}'r'{M_{\odot}}, \alpha$ = 'f'{self.alpha},'r'$\chi$ = 'f'{self.spin}')
+        
         plt.show()
