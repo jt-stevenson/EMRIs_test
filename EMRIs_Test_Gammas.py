@@ -27,6 +27,7 @@ Fixed=True
 winds=True
 
 import binary_formation_distribution_V8 as myscript
+import binary_formation_distribution_V10 as myscript2
 import NT_disk_Eqns_V1 as jscript
 
 ################################################################################################
@@ -68,7 +69,8 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk):
     Rsch = 2 * ct.G * Mbh / ct.c**2
     Rs = disk.R / Rsch
 
-    Mmean=np.mean(mass_sec) * ct.MSun
+    # Mmean=np.mean(mass_sec) * ct.MSun
+    Mmean=np.mean(mass_sec)* ct.MSun 
 
 
     ledd=jscript.Ledd(Mmean, X=0.7)
@@ -87,7 +89,10 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk):
         mbhl=jscript.BHL_accretion(args, disk, Mbh, Mmean, Mdot)
         print(mbhl)
 
-        mean_Gamma_wind=10**7  * jscript.compute_torque_wind(disk, mbhl, Mmean)
+        drhodr=jscript.drhodR(disk)
+
+        # mean_Gamma_wind=10**7* jscript.compute_torque_wind(disk, mbhl, Mmean)
+        mean_Gamma_wind=10**7*myscript2.gamma_wind(Mmean, disk, drhodr)
         mean_Gamma = mean_Gamma_GW+mean_Gamma_noGW+mean_Gamma_wind
     else:
         mean_Gamma = mean_Gamma_GW+mean_Gamma_noGW
@@ -162,9 +167,9 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk):
     ax.legend()
     plt.tight_layout()
     if args.DT  == "TQM":
-        plt.savefig(f'Torques/TQM/Mbh_{np.log10(Mbh/ct.MSun):.1f}_{args.DT}_{args.TT}_{args.gen}.pdf', format='pdf', dpi=300)
+        plt.savefig(f'Torques/TQM/Mbh_{np.log10(Mbh/ct.MSun):.1f}_{args.DT}_{args.TT}_{args.gen}_wind_MP.pdf', format='pdf', dpi=300)
     elif args.DT == "SG":
-        plt.savefig(f'Torques/Mbh_{np.log10(Mbh/ct.MSun):.1f}_alpha_{args.a}_{args.DT}_{args.TT}_{args.gen}.pdf', format='pdf', dpi=300)
+        plt.savefig(f'Torques/SG/Mbh_{np.log10(Mbh/ct.MSun):.1f}_alpha_{args.a}_{args.DT}_{args.TT}_{args.gen}_wind_MP_2.pdf', format='pdf', dpi=300)
     return
 
 ################################################################################################
@@ -172,7 +177,7 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk):
 ################################################################################################
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-DT', type=str, default="TQM", choices=['SG', 'TQM'])
+    parser.add_argument('-DT', type=str, default="SG", choices=['SG', 'TQM'])
     parser.add_argument('-TT', type=str, default="G23", choices=['B16', 'G23'])
     parser.add_argument('-gen', type=str, default='1g', choices=['1g', 'Ng'])
     parser.add_argument('-a', type=float, default=0.1)    # real number

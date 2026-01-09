@@ -5,22 +5,11 @@ import multiprocessing
 import binary_formation_distribution_V8 as myscript
 from scipy.interpolate import interp1d
 
-import pagn
-from os import makedirs
-import pandas as pd
-
 from scipy.interpolate import UnivariateSpline
 
-#constants from pagn.constants,had some issues loading the constants for some reason so just copied them across locally
 c = 2.99792458e8  # m/s
 G = 6.67430e-11  # m^3 kg^-1 s^-2
 MSun = 1.98847e30  # kg
-yr = 365.25*24*60*60  # s
-pc = 3.086e16  # m
-RSun_to_au = 4.6491303438174012e-03  # R_sol/AU
-SI_to_gcm3 = 1e-3
-SI_to_gcm2 = 1e-1
-SI_to_cms = 1e2
 
 def R_isco_function(MBH, spin):
     #function to calculate innermost stable circular orbit for a BH of given mass and spin
@@ -78,7 +67,12 @@ def Q_fn(y, MBH, spin):
     return Q
 
 #Surface Densities
-def Sigma_NT(r, MBH, spin, mdot, alpha):
+def Sigma_NT(r, disk):
+    MBH=disk.Mbh
+    spin=disk.spin
+    mdot=disk.mdot
+    alpha=disk.alpha
+
     M=MBH * G /(c*c)
     rstar=(r/M)
     y=np.sqrt(r/M)
@@ -92,7 +86,12 @@ def Sigma_NT(r, MBH, spin, mdot, alpha):
     sigma = 5 * (1/alpha) * (1/mdot) * rstar**(3/2) * (1/(A*A)) * B*B*B * C**(1/2) * E * (1/Q)
     return sigma
 
-def Sigma_NT_Middle(r, MBH, spin, mdot, alpha):
+def Sigma_NT_Middle(r, disk):
+    MBH=disk.Mbh
+    spin=disk.spin
+    mdot=disk.mdot
+    alpha=disk.alpha
+
     M=MBH * G /(c*c)
     m=MBH/MSun
     rstar=(r/M)
@@ -106,7 +105,12 @@ def Sigma_NT_Middle(r, MBH, spin, mdot, alpha):
     sigma = (9e4) * alpha**(-4/5) * m**(1/5) * mdot**(3/5) * rstar**(-3/5) * B**(-4/5) * C**(1/2) * D**(-4/5) * Q**(3/5)
     return sigma
 
-def Sigma_NT_Outer(r, MBH, spin, mdot, alpha):
+def Sigma_NT_Outer(r, disk):
+    MBH=disk.Mbh
+    spin=disk.spin
+    mdot=disk.mdot
+    alpha=disk.alpha
+
     M=MBH * G /(c*c)
     m=MBH/MSun
     rstar=(r/M)
@@ -123,7 +127,11 @@ def Sigma_NT_Outer(r, MBH, spin, mdot, alpha):
     return(sigma)
 
 #Thicknesses
-def H_NT(r, MBH, spin, mdot):
+def H_NT(r, disk):
+    MBH=disk.Mbh
+    spin=disk.spin
+    mdot=disk.mdot
+
     #accurate to A+F
     M=MBH * G /(c*c)
     y=np.sqrt(r/M)
@@ -138,8 +146,12 @@ def H_NT(r, MBH, spin, mdot):
     H = 1e5 * mdot * A**2 * B**(-3) * C**(1/2) * D**(-1) * E**(-1) * Q #in cms
     return H
 
-def H_NT_2(r, MBH, spin, mdot):
+def H_NT_2(r, disk):
     #added factor of m like in Grishin et al 2025, seems to fix a scaling issue
+    MBH=disk.Mbh
+    spin=disk.spin
+    mdot=disk.mdot
+
     M=MBH * G /(c*c)
     m=MBH/MSun
     y=np.sqrt(r/M)
@@ -154,7 +166,12 @@ def H_NT_2(r, MBH, spin, mdot):
     H = 1e5 * mdot * m * A**2 * B**(-3) * C**(1/2) * D**(-1) * E**(-1) * Q #in cms
     return H
 
-def H_NT_Middle(r, MBH, spin, mdot, alpha):
+def H_NT_Middle(r, disk):
+    MBH=disk.Mbh
+    spin=disk.spin
+    mdot=disk.mdot
+    alpha=disk.alpha
+
     M=MBH * G /(c*c)
     m=MBH/MSun
     rstar=(r/M)
@@ -170,7 +187,12 @@ def H_NT_Middle(r, MBH, spin, mdot, alpha):
     H = 1e3 * alpha**(-1/10) * m**(9/10) * mdot**(1/5) * rstar**(21/20) * A * B**(-6/5) * C**(1/2) * D**(-3/5) * E**(-1/2) * Q**(1/5) #in cms
     return H
 
-def H_NT_Outer(r, MBH, spin, mdot, alpha):
+def H_NT_Outer(r, disk):
+    MBH=disk.Mbh
+    spin=disk.spin
+    mdot=disk.mdot
+    alpha=disk.alpha
+
     M=MBH * G /(c*c)
     m=MBH/MSun
     rstar=(r/M)
@@ -187,7 +209,11 @@ def H_NT_Outer(r, MBH, spin, mdot, alpha):
     return H
 
 #Temperatures
-def T_NT(r, MBH, spin, mdot, alpha):
+def T_NT(r, disk):
+    MBH=disk.Mbh
+    spin=disk.spin
+    alpha=disk.alpha
+
     M=MBH * G /(c*c)
     m=MBH/MSun
     rstar=(r/M)
@@ -200,7 +226,12 @@ def T_NT(r, MBH, spin, mdot, alpha):
     T= (5e7) * alpha**(-1/4) * m**(-1/4) * rstar**(-3/8) * A**(-1/2) * B**(1/2) * E**(1/4) #in Kelvin
     return T
 
-def T_NT_Middle(r, MBH, spin, mdot, alpha):
+def T_NT_Middle(r, disk):
+    MBH=disk.Mbh
+    spin=disk.spin
+    mdot=disk.mdot
+    alpha=disk.alpha
+
     M=MBH * G /(c*c)
     m=MBH/MSun
     rstar=(r/M)
@@ -213,7 +244,12 @@ def T_NT_Middle(r, MBH, spin, mdot, alpha):
     T = (7e8) * alpha**(-1/5) * m**(-1/5) * mdot**(2/5) * rstar**(-9/10) * B**(-2/5) * D**(-1/5) * Q**(2/5)
     return(T)
 
-def T_NT_Outer(r, MBH, spin, mdot, alpha):
+def T_NT_Outer(r, disk):
+    MBH=disk.Mbh
+    spin=disk.spin
+    mdot=disk.mdot
+    alpha=disk.alpha
+
     M=MBH * G /(c*c)
     m=MBH/MSun
     rstar=(r/M)
@@ -228,7 +264,12 @@ def T_NT_Outer(r, MBH, spin, mdot, alpha):
     return(T)
 
 #Midplane Densities
-def rho_0_NT(r, MBH, spin, mdot, alpha):
+def rho_0_NT(r, disk):
+    MBH=disk.Mbh
+    spin=disk.spin
+    mdot=disk.mdot
+    alpha=disk.alpha
+
     M=MBH * G /(c*c)
     m=MBH/MSun
     rstar=(r/M)
@@ -243,7 +284,12 @@ def rho_0_NT(r, MBH, spin, mdot, alpha):
     rho_0 = 2e-5 * alpha**(-1) * m**(-1) * mdot**(-2) * rstar**(3/2) * A**(-4) * B**6 * D * E*E * Q**(-2)
     return(rho_0)
 
-def rho_0_NT_Middle(r, MBH, spin, mdot, alpha):
+def rho_0_NT_Middle(r, disk):
+    MBH=disk.Mbh
+    spin=disk.spin
+    mdot=disk.mdot
+    alpha=disk.alpha
+
     M=MBH * G /(c*c)
     m=MBH/MSun
     rstar=(r/M)
@@ -258,7 +304,12 @@ def rho_0_NT_Middle(r, MBH, spin, mdot, alpha):
     rho_0 = 4e1 * alpha**(-7/10) * m**(-7/10) * mdot**(2/5) * rstar**(-33/20) * A**(-1) * B**(3/5) * D**(-1/5) * E**(1/2) * Q**(2/5)
     return(rho_0)
 
-def rho_0_NT_Outer(r, MBH, spin, mdot, alpha):
+def rho_0_NT_Outer(r, disk):
+    MBH=disk.Mbh
+    spin=disk.spin
+    mdot=disk.mdot
+    alpha=disk.alpha
+
     M=MBH * G /(c*c)
     m=MBH/MSun
     rstar=(r/M)
@@ -274,7 +325,12 @@ def rho_0_NT_Outer(r, MBH, spin, mdot, alpha):
     return(rho_0)
 
 #Irradiance
-def F_NT(r, MBH, spin, mdot):
+def F_NT(r, disk):
+    MBH=disk.Mbh
+    spin=disk.spin
+    mdot=disk.mdot
+    alpha=disk.alpha
+
     #Same for inner, mid and outer regions
     M=MBH * G /(c*c)
     m=MBH/MSun
@@ -289,7 +345,12 @@ def F_NT(r, MBH, spin, mdot):
     return output
 
 # Radiation Pressure
-def Beta_NT(r, MBH, spin, mdot, alpha):
+def Beta_NT(r, disk):
+    MBH=disk.Mbh
+    spin=disk.spin
+    mdot=disk.mdot
+    alpha=disk.alpha
+
     M=MBH * G /(c*c)
     m=MBH/MSun
     rstar=(r/M)
@@ -306,7 +367,12 @@ def Beta_NT(r, MBH, spin, mdot, alpha):
     beta = output/(1+output)
     return beta
 
-def Beta_NT_Middle(r, MBH, spin, mdot, alpha):
+def Beta_NT_Middle(r, disk):
+    MBH=disk.Mbh
+    spin=disk.spin
+    mdot=disk.mdot
+    alpha=disk.alpha
+
     M=MBH * G /(c*c)
     m=MBH/MSun
     rstar=(r/M)
@@ -323,7 +389,12 @@ def Beta_NT_Middle(r, MBH, spin, mdot, alpha):
     beta = output/(1+output)
     return beta
 
-def Beta_NT_Outer(r, MBH, spin, mdot, alpha):
+def Beta_NT_Outer(r, disk):
+    MBH=disk.Mbh
+    spin=disk.spin
+    mdot=disk.mdot
+    alpha=disk.alpha
+
     M=MBH * G /(c*c)
     m=MBH/MSun
     rstar=(r/M)
@@ -341,7 +412,12 @@ def Beta_NT_Outer(r, MBH, spin, mdot, alpha):
     return beta
 
 # Optical Depth Equations
-def Tau_NT(r, MBH, spin, mdot, alpha):
+def Tau_NT(r, disk):
+    MBH=disk.Mbh
+    spin=disk.spin
+    mdot=disk.mdot
+    alpha=disk.alpha
+
     M=MBH * G /(c*c)
     m=MBH/MSun
     rstar=(r/M)
@@ -358,7 +434,11 @@ def Tau_NT(r, MBH, spin, mdot, alpha):
     tau_ff_tau_es=output**2
     return tau_ff_tau_es
 
-def Tau_NT_Middle(r, MBH, spin, mdot):
+def Tau_NT_Middle(r, disk):
+    MBH=disk.Mbh
+    spin=disk.spin
+    mdot=disk.mdot
+
     M=MBH * G /(c*c)
     rstar=(r/M)
     y=np.sqrt(r/M)
@@ -373,7 +453,11 @@ def Tau_NT_Middle(r, MBH, spin, mdot):
     tau_ff_div_tau_es=output
     return tau_ff_div_tau_es
 
-def Tau_NT_Outer(r, MBH, spin, mdot):
+def Tau_NT_Outer(r, disk):
+    MBH=disk.Mbh
+    spin=disk.spin
+    mdot=disk.mdot
+
     M=MBH * G /(c*c)
     rstar=(r/M)
     y=np.sqrt(r/M)
@@ -388,8 +472,13 @@ def Tau_NT_Outer(r, MBH, spin, mdot):
     tau_ff_div_tau_es=output
     return tau_ff_div_tau_es
 
-def Template_NT(r, MBH, spin, mdot, alpha):
+def Template_NT(r, disk):
     # Template NT function to make coding the rest of the equations easier
+    MBH=disk.Mbh
+    spin=disk.spin
+    mdot=disk.mdot
+    alpha=disk.alpha
+    
     M=MBH * G /(c*c)
     m=MBH/MSun
     rstar=(r/M)
@@ -454,24 +543,35 @@ def R_tr(y, MBH, spin, eps, le, alpha):
 
 #Eqns from Grishin et al 2025 defining transitions between inner, middle and outer regions
 
-def R_inner_mid(r, MBH, mdot, alpha):
+def R_inner_mid(self):
+    r=self.Rmin
+    MBH=self.Mbh 
+    mdot=self.mdot
+    alpha=self.alpha
+
     m=MBH/(1e8*MSun)
     mdotprime=mdot*(1-r**(-1/2))
     r_tr=449.842 * alpha**(2/21) * m**(2/21) * mdotprime**(16/21)
     return(r_tr)
 
-def R_mid_outer(r, mdot):
+def R_mid_outer(self):
+    r=self.Rmin
+    mdot=self.mdot
     mdotprime=mdot*(1-r**(-1/2))
     r_tr=987.891 * mdotprime**(2/3)
     return(r_tr)
 
-def R_outer_AGN(r, MBH, mdot, alpha):
+def R_outer_AGN(self):
+    r=self.Rmin
+    MBH=self.Mbh 
+    mdot=self.mdot
+    alpha=self.alpha
     m=MBH/(1e8*MSun)
     mdotprime=mdot*(1-r**(-1/2))
     r_tr=580.65 * alpha**(28/45) * m**(-52/45) * mdotprime**(-22/45)
     return(r_tr)
 
-#Eqns derived from A+F NT Surface Density Profile Eqns
+#Eqns derived from A+F NT Surface Density Profile Eqns - didn't work
 
 def r_in_mid(y, MBH, spin, mdot, alpha):
     M=MBH * G /(c*c)
@@ -659,287 +759,3 @@ def Ledd(MBH, X):
     kappa=0.2 * (1+X)
     Ledd= (4 * np.pi * G * MBH * c) /kappa
     return Ledd
-
-#NTVSsg solver from disk_prfiles.ipynb, now rewritten into Novikov.py as a disk object, moved here in case it ever needs calling
-def NTvsSG_disc_solver_smooth(MBH_power, spin, alpha, mdot, eps, le, steps, path, printing=True, plotting=True, save_to_file=True):
-    #general scaling from Abramowicz and Fragile
-    MBH=10**MBH_power * MSun #in kgs
-    M=MBH * G /(c*c)
-    R_G=M
-
-    m=MBH/MSun
-    Rsch= 2*G*MBH/c**2
-
-    if mdot==None and le==None:
-        raise ValueError('Please provide an accretion rate or Eddington ratio!')
-    elif le==None:
-        le=mdot*eps
-    elif mdot==None:
-        mdot=le/eps
-
-    disk = pagn.SirkoAGN(Mbh=MBH, alpha=alpha, le=le, eps=eps)
-    Rmin = disk.Rmin
-    Rmax = disk.Rmax
-    disk.solve_disk(N=steps)
-
-    print(f'SG: {Rmin/R_G} Rg, {disk.Rmin/R_G} Rg, {disk.R[0]/R_G} Rg')
-
-    Rout=Rmax
-    sigma = (200 * 1e3) * (MBH / (1.3e8*MSun)) ** (1 / 4.24)
-    Mdot_out = 320*(MSun/yr)*(Rout/(95*pc)) * (sigma/(188e3))**2
-
-    diskTQM = pagn.ThompsonAGN(Mbh=MBH, Rout=Rout, Rin=Rmin, Mdot_out=Mdot_out)
-    diskTQM.solve_disk()
-
-    print(f'TQM: {Rmin/R_G} Rg, {diskTQM.Rin/R_G} Rg, {diskTQM.R[0]/R_G} Rg')
-
-    Rmin= R_isco_function(MBH, spin) #uses relativistic eqn for ISCO to set inner edge of disc
-    r_isco=R_isco_function(MBH, spin)
-
-    R=np.logspace(np.log10(r_isco), np.log10(Rmax), steps+1)
-    # R=np.linspace(r_isco, Rmax, steps+1)
-
-    R_im=R_inner_mid(r_isco, MBH, mdot, alpha)
-    R_mo=R_mid_outer(r_isco, mdot)
-    R_oa=R_outer_AGN(r_isco, MBH, mdot, alpha)
-
-    R_agn=disk.R_AGN/R_G
-
-    if save_to_file==True:
-        mypath=path
-
-        try:
-            makedirs(mypath)
-        except FileExistsError:
-            pass
-
-        file = open(f'{mypath}NT_inputs.txt', "w")
-        file.write(f"Input Parameters:\n")
-        file.write(f"version     = V1\n")
-        file.write(f"log(M_SMBH) = {MBH_power}\n")
-        file.write(f"spin        = {spin}\n")
-        file.write(f"alpha       = {alpha}\n")
-        file.write(f"mdot        = {mdot}\n")
-        file.write(f"eps         = {eps}\n")
-        file.write(f"le          = {le}\n")
-        file.write(f"R_min       = {Rmin:.1e}\n")
-        file.write(f"R_max       = {Rmax:.1e}\n")
-        file.write(f"steps       = {steps}\n")
-        
-    Rs=[]
-    sigmas=[]
-    Hs=[]
-    hrs=[]
-    rho0s=[]
-    rhos=[]
-    Ts=[]
-
-    flag=0
-    flag3=0
-
-    r_rel=0
-
-    inner_flag=0
-    inner_transition_flag=0
-    mid_flag=0
-    mid_transition_flag=0
-    outer_flag=0
-
-    sf_i=0
-
-    k=50
-    if printing==True:
-        print(R_oa/R_agn)
-        print(f'Initial Radius = {R[k]/R_G} Rg, R_isco = {r_isco/R_G} Rg')
-
-    for i in range(k, steps+1):
-        r=R[i]
-        y=np.sqrt(r/M)
-        rstar=(r/M)
-
-        #######TO EDIT
-
-        if rstar<0.5*R_im:
-            if inner_flag==0:
-                if printing==True:
-                    print(f'disk confidently in inner region')
-                inner_flag=1
-            rho_0=rho_0_NT(r, MBH, spin, mdot, alpha)
-            T=T_NT(r, MBH, spin, mdot, alpha)
-            H=H_NT_2(r, MBH, spin, mdot)
-            sigma=Sigma_NT(r, MBH, spin, mdot, alpha)
-
-        if 0.5*R_im<=rstar<5*R_im:
-            if inner_transition_flag==0:
-                if printing==True:
-                    print(f'disk in inner-mid transition region')
-                inner_transition_flag=1
-            
-            param_in=Sigma_NT(r, MBH, spin, mdot, alpha)
-            param_mid=Sigma_NT_Middle(r, MBH, spin, mdot, alpha)
-
-            if param_in-param_mid>0:
-                if mid_flag==0:
-                    if printing==True:
-                        print(f'disk transitions to middle region at {rstar} Rg')
-                        r_im=rstar
-                    mid_flag=1
-                rho_0=rho_0_NT_Middle(r, MBH, spin, mdot, alpha)
-                T=T_NT_Middle(r, MBH, spin, mdot, alpha)
-                H=H_NT_Middle(r, MBH, spin, mdot, alpha)
-                sigma=Sigma_NT_Middle(r, MBH, spin, mdot, alpha)
-            else:
-                sigma=Sigma_NT(r, MBH, spin, mdot, alpha)
-                rho_0=rho_0_NT(r, MBH, spin, mdot, alpha)
-                T=T_NT(r, MBH, spin, mdot, alpha)
-                H=H_NT_2(r, MBH, spin, mdot)
-            
-        
-        if 5*R_im<=rstar<0.5*R_mo:
-            rho_0=rho_0_NT_Middle(r, MBH, spin, mdot, alpha)
-            T=T_NT_Middle(r, MBH, spin, mdot, alpha)
-            H=H_NT_Middle(r, MBH, spin, mdot, alpha)
-            sigma=Sigma_NT_Middle(r, MBH, spin, mdot, alpha)
-
-        if 0.5*R_mo<=rstar<100*R_mo:
-            if mid_transition_flag==0:
-                if printing==True:
-                    print(f'disk in mid-outer transition region')
-                mid_transition_flag=1
-            
-            param_out=Sigma_NT_Outer(r, MBH, spin, mdot, alpha)
-            param_mid=Sigma_NT_Middle(r, MBH, spin, mdot, alpha)
-
-            if param_mid-param_out>0:
-                if outer_flag==0:
-                    if printing==True:
-                        print(f'disk transitions to outer region at {rstar} Rg')
-                        r_mo=rstar
-                    outer_flag=1
-                rho_0=rho_0_NT_Outer(r, MBH, spin, mdot, alpha)
-                T=T_NT_Outer(r, MBH, spin, mdot, alpha)
-                H=H_NT_Outer(r, MBH, spin, mdot, alpha)
-                sigma=Sigma_NT_Outer(r, MBH, spin, mdot, alpha)
-            else:
-                rho_0=rho_0_NT_Middle(r, MBH, spin, mdot, alpha)
-                T=T_NT_Middle(r, MBH, spin, mdot, alpha)
-                H=H_NT_Middle(r, MBH, spin, mdot, alpha)
-                sigma=Sigma_NT_Middle(r, MBH, spin, mdot, alpha)
-        
-        if 5*R_mo<rstar:
-            rho_0=rho_0_NT_Outer(r, MBH, spin, mdot, alpha)
-            T=T_NT_Outer(r, MBH, spin, mdot, alpha)
-            H=H_NT_Outer(r, MBH, spin, mdot, alpha)
-            sigma=Sigma_NT_Outer(r, MBH, spin, mdot, alpha)
-
-        ########END
-        
-        sigmas.append(sigma)
-        Ts.append(T)
-        Hs.append(H)
-        rho0s.append(rho_0)
-        Rs.append(rstar)
-
-        hr=H/(100*r)
-
-        hrs.append(hr)
-
-        rho=sigma/(2*H)
-        rhos.append(rho)
-
-        omega=np.sqrt(G * MBH / (r*r*r))
-
-        v=omega * r
-        vc=v/c
-
-        Qt= omega*omega / (2 * np.pi * G * rho)
-
-        if vc<0.1 and flag==0:
-            if printing==True:
-                print(f'disk stops being relativistic at {r/R_G} Rg')
-            r_rel=r
-            flag+=1
-        
-        if r>=disk.R_AGN and flag3==0:
-            if printing==True:
-                print(f'disk begins star formation at {r/R_G} Rg')
-            sf_i=i
-            r_outer=r
-            flag3+=1
-        
-    if save_to_file==True:
-        file = open(f'{mypath}NT_inputs_smooth.txt', "a")
-        file.write(f"SF          = {flag3}\n")
-        file.write(f"SF index    = {sf_i}\n")
-        d=dict({'Radius [Rg]': Rs, 'Surface Density [gcm^-2]': sigmas, 'Temperature [K]': Ts, 'Midplane Density [gcm^-2]': rho0s, 'Thickness [cm]': Hs, 'Aspect Ratio': hrs})
-        df=pd.DataFrame.from_dict(d)
-        df.to_csv(f'{mypath}NT_disc_smooth.csv', index=False)
-
-    if plotting==True:
-
-        fig, axs = plt.subplots(1, 5, figsize=(25, 5), dpi=100)
-
-        colour='plasma'
-        cmap = plt.colormaps[colour]
-
-        plt.suptitle(f'$SMBH = 10^{MBH_power}'r'{M_{\odot}}, \alpha$ = 'f'{alpha},'r'$\chi$ = 'f'{spin}')
-
-        i=0
-
-        axs[i].plot(disk.R/M, 2*disk.h*disk.rho*SI_to_gcm2, label = r"SG", color=cmap(0.0))
-        axs[i].plot(diskTQM.R/M, 2*diskTQM.h*diskTQM.rho*SI_to_gcm2, label = r"TQM", color=cmap(0.5))
-        axs[i].plot(Rs, sigmas, '-', color=cmap(0.8), label = r"NT")
-
-        axs[i].set_ylabel(r'$\Sigma_{\rm g} [{\rm g \, cm}^{-2}]$')
-
-        i=1
-
-        axs[i].plot(disk.R/M, disk.T, color=cmap(0.0), label = r"SG")
-        axs[i].plot(diskTQM.R/M, diskTQM.T, color=cmap(0.5), label = r"TQM")
-        axs[i].plot(Rs, Ts, '-', color=cmap(0.8), label = r"NT")
-
-        axs[i].set_ylabel(r'$T [K] $')
-
-        i=2
-
-        axs[i].plot(disk.R/M, disk.rho*SI_to_gcm3, color=cmap(0.0), label = r"SG")
-        axs[i].plot(diskTQM.R/M, diskTQM.rho*SI_to_gcm3, color=cmap(0.5), label = r"TQM")
-        axs[i].plot(Rs, rho0s, '-', color=cmap(0.8), label = r"NT")
-
-        axs[i].set_ylabel(r'$\rho [gcm^{-3}] $')
-
-        i=3
-
-        axs[i].plot(disk.R/M, disk.h*SI_to_cms, '-', color=cmap(0.0), label = r"SG")
-        axs[i].plot(diskTQM.R/M, diskTQM.h*SI_to_cms, '-', color=cmap(0.5), label = r"TQM")
-        axs[i].plot(Rs, Hs, '-', color=cmap(0.8), label = r"NT")
-
-        axs[i].set_ylabel(r'$H [cm]$')
-        axs[i].legend()
-
-        i=4
-
-        axs[i].plot(disk.R/M, disk.h/disk.R, '-', color=cmap(0.0), label = r"SG")
-        axs[i].plot(diskTQM.R/M, diskTQM.h/diskTQM.R, '-', color=cmap(0.5), label = r"TQM")
-        axs[i].plot(Rs, hrs, '-', color=cmap(0.8), label = r"NT")
-
-        axs[i].set_ylabel(r'$H/R$')
-
-        for i in range(0, 5):
-            axs[i].axvline(x=r_im, linestyle='--', color=cmap(0.9), alpha=0.5, label = r"$R_{inner}$")
-            axs[i].axvline(x=r_rel/M, linestyle='--', color=cmap(0.7), alpha=0.5, label = r"$R_{rel}$")
-            axs[i].axvline(x=r_mo, linestyle='--', color=cmap(0.4), alpha=0.5, label = r"$R_{outer}$")
-            axs[i].axvline(x=disk.R_AGN/M, linestyle='--', color=cmap(0.2), alpha=0.5, label = r"$R_{AGN}$")
-
-            axs[i].set_xscale('log')
-            axs[i].set_yscale('log')
-
-            axs[i].set_xlabel("r/M")
-            axs[i].set_xlim(1e0, 3e7)
-
-        axs[i].legend()
-
-        plt.tight_layout()
-        if save_to_file==True:
-            plt.savefig(f'{mypath}all_profiles_with_TQM_smooth.pdf')
-        plt.show()
