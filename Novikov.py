@@ -57,10 +57,10 @@ class NovikovThorneAGN:
         self.mdot=mdot
         self.le=le
 
-        self.Rsch = 2 * self.Mbh * ct.G / (ct.c ** 2)
+        self.Rs = 2 * self.Mbh * ct.G / (ct.c ** 2)
         self.Rmin = jscript.R_isco_function(self.Mbh, self.spin)
 
-        self.Rmax = 1e7 * self.Rsch
+        self.Rmax = 1e7 * self.Rs
 
         if printing==True:
             print("### Novikov-Thorne 1973 parameters ###")
@@ -86,7 +86,7 @@ class NovikovThorneAGN:
             Disc radial resolution.
         """
 
-        self.Rs=np.logspace(np.log10(self.Rmin), np.log10(self.Rmax), steps+1)
+        self.Radii=np.logspace(np.log10(self.Rmin), np.log10(self.Rmax), steps+1)
 
         R_im=jscript.R_inner_mid(self)
         R_mo=jscript.R_mid_outer(self)
@@ -116,13 +116,17 @@ class NovikovThorneAGN:
             file.write(f"R_max       = {self.Rmax:.1e}\n")
             file.write(f"steps       = {steps}\n")
         
-        Rs=[]
+        Radiuss=[]
         sigmas=[]
         Hs=[]
         hrs=[]
         rho0s=[]
         rhos=[]
         Ts=[]
+        rs=[]
+        css=[]
+
+        kappas=[]
 
         flag=0
 
@@ -134,7 +138,7 @@ class NovikovThorneAGN:
 
         k=50
         for i in range(k, steps+1):
-            r=self.Rs[i]
+            r=self.Radii[i]
             y=np.sqrt(r/self.Rg)
             rstar=(r/self.Rg)
 
@@ -149,6 +153,7 @@ class NovikovThorneAGN:
                 T=jscript.T_NT(r, self)
                 H=jscript.H_NT_2(r, self)
                 sigma=jscript.Sigma_NT(r, self)
+                K=0.2*(1+self.X)
 
             if 0.5*R_im<=rstar<5*R_im:
                 if inner_transition_flag==0:
@@ -158,6 +163,8 @@ class NovikovThorneAGN:
                 
                 param_in=jscript.Sigma_NT(r, self)
                 param_mid=jscript.Sigma_NT_Middle(r,self)
+
+                K=0.2*(1+self.X)
 
                 if param_in-param_mid>0:
                     if mid_flag==0:
@@ -182,6 +189,8 @@ class NovikovThorneAGN:
                 H=jscript.H_NT_Middle(r, self)
                 sigma=jscript.Sigma_NT_Middle(r, self)
 
+                K=0.2*(1+self.X)
+
             if 0.5*R_mo<=rstar<100*R_mo:
                 if mid_transition_flag==0:
                     if printing==True:
@@ -201,25 +210,34 @@ class NovikovThorneAGN:
                     T=jscript.T_NT_Outer(r, self)
                     H=jscript.H_NT_Outer(r, self)
                     sigma=jscript.Sigma_NT_Outer(r, self)
+                    K=6.4e22 * rho_0 * T**(-7/2)
                 else:
                     rho_0=jscript.rho_0_NT_Middle(r, self)
                     T=jscript.T_NT_Middle(r, self)
                     H=jscript.H_NT_Middle(r, self)
                     sigma=jscript.Sigma_NT_Middle(r, self)
+                    K=0.2*(1+self.X)
             
             if 5*R_mo<rstar:
                 rho_0=jscript.rho_0_NT_Outer(r, self)
                 T=jscript.T_NT_Outer(r, self)
                 H=jscript.H_NT_Outer(r, self)
                 sigma=jscript.Sigma_NT_Outer(r, self)
+                K=6.4e22 * rho_0 * T**(-7/2)
 
             ########END
+
+            Cs=H/(100*np.sqrt(ct.G * self.Mbh / r**3))
             
             sigmas.append(sigma)
             Ts.append(T)
             Hs.append(H)
             rho0s.append(rho_0)
-            Rs.append(rstar)
+            Radiuss.append(rstar)
+            rs.append(r)
+
+            kappas.append(K)
+            css.append(Cs)
 
             hr=H/(100*r)
 
@@ -240,17 +258,29 @@ class NovikovThorneAGN:
                     print(f'disk stops being relativistic at {r/self.Rg} Rg')
                 self.r_rel=r/self.Rg
                 flag=1
-        
-        self.Sigma=sigmas
-        self.T=Ts
-        self.H=Hs
-        self.R=Rs
-        self.rho0=rho0s
-        self.HRs=hrs
+
+        #Outputs converted to SI units
+        self.Sigma=np.array(sigmas)/1e-1
+        self.T=np.array(Ts)
+        self.h=np.array(Hs)/1e2
+        self.R=np.array(rs)
+        self.rstar=np.array(Radiuss)
+        self.rho=np.array(rho0s)/1e-3
+        self.HRs=np.array(hrs)
+        self.kappa=np.array(kappas)/1e1
+        self.cs=np.array(css)
+
+        self.tauV=self.kappa*self.rho*self.h
+
+        self.Mdot=self.mdot * jscript.Ledd(self.Mbh, self.X)
+
+        self.Omega = np.sqrt(ct.G * self.Mbh / (self.R*self.R*self.R))
+        Teff4 = 3 * self.Mdot * (1 - np.sqrt(self.Rmin / self.R)) * self.Omega * self.Omega / (8 * np.pi)
+        self.Teff4 = Teff4 / ct.sigmaSB
         
         if save_to_file==True:
             file = open(f'{mypath}NT_inputs_smooth.txt', "a")
-            d=dict({'Radius [Rg]': Rs, 'Surface Density [gcm^-2]': sigmas, 'Temperature [K]': Ts, 'Midplane Density [gcm^-2]': rho0s, 'Thickness [cm]': Hs, 'Aspect Ratio': hrs})
+            d=dict({'Radius [Rg]': Radiuss, 'Surface Density [gcm^-2]': sigmas, 'Temperature [K]': Ts, 'Midplane Density [gcm^-2]': rho0s, 'Thickness [cm]': Hs, 'Aspect Ratio': hrs})
             df=pd.DataFrame.from_dict(d)
             df.to_csv(f'{mypath}NT_disc_smooth.csv', index=False)
 

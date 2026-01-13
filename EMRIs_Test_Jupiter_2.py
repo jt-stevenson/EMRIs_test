@@ -26,6 +26,7 @@ Fixed=True
 
 import binary_formation_distribution_V8 as myscript #edited to explicitly take alpha instead of disc.alpha
 import NT_disk_Eqns_V1 as jscript
+import Novikov
 
 ################################################################################################
 ### Simulation routine #########################################################################
@@ -60,6 +61,10 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
         Rmin = disk.Rin
         Rmax = disk.Rout
         # print(disk.Mdot_out)
+    elif args.DT  == "NT":
+        disk = Novikov.NovikovThorneAGN(Mbh=Mbh, alpha=alpha, spin=spin)
+        Rmin = disk.Rmin
+        Rmax = disk.Rmax
     disk.solve_disk()
 
     if args.DT  == "TQM":
@@ -414,7 +419,7 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
 ################################################################################################
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-DT', type=str, default="TQM", choices=['SG', 'TQM'])
+    parser.add_argument('-DT', type=str, default="NT", choices=['SG', 'TQM', 'NT'])
     parser.add_argument('-TT', type=str, default="G23", choices=['B16', 'G23'])
     parser.add_argument('-gen', type=str, default='1g', choices=['1g', 'Ng'])
     parser.add_argument('-a', type=float, default=0.01)
@@ -444,7 +449,7 @@ if __name__ == '__main__':
     if printing == True:
         date_time = start.strftime("%y%m%d_%H%M%S")
 
-        dir_name = f"/Users/pmxks13/PhD/EMRIs_test/EMRIs_Jupiter_2/c_{args.c}/{args.DT}/alpha_{args.a}/"
+        dir_name = f"/Users/pmxks13/PhD/EMRIs_test/EMRIs_Jupiter_2/c_{args.c}/{args.DT}/alpha_{args.a}/spin_{args.spin}/"
         if not os.path.exists(dir_name):
             os.makedirs(dir_name)
         file_name = dir_name+f"/EMRIs_{args.TT}_{args.gen}_{args.N}_events_with_GW.txt"

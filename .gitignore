@@ -4,6 +4,7 @@
 *.dat
 *.png
 *.csv
+*.sh
 
 #ignore output files in their own subdirectories
 EMRIs/

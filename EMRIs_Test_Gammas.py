@@ -19,7 +19,7 @@ warnings.filterwarnings('ignore')
 printing=False
 plotting=True
 type_II_computation = "conservative" 
-C=17205
+C=965665
 Spin=0.9
 
 Fixed=True
@@ -29,6 +29,7 @@ winds=True
 import binary_formation_distribution_V8 as myscript
 import binary_formation_distribution_V10 as myscript2
 import NT_disk_Eqns_V1 as jscript
+import Novikov
 
 ################################################################################################
 ### Simulation routine #########################################################################
@@ -64,6 +65,10 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk):
         Rmin = disk.Rin
         Rmax = disk.Rout
         # print(disk.Mdot_out)
+    elif args.DT  == "NT":
+        disk = Novikov.NovikovThorneAGN(Mbh=Mbh, alpha=alpha, spin=spin)
+        Rmin = disk.Rmin
+        Rmax = disk.Rmax
     disk.solve_disk()
 
     Rsch = 2 * ct.G * Mbh / ct.c**2
@@ -71,7 +76,6 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk):
 
     # Mmean=np.mean(mass_sec) * ct.MSun
     Mmean=np.mean(mass_sec)* ct.MSun 
-
 
     ledd=jscript.Ledd(Mmean, X=0.7)
     Ledd=jscript.Ledd(Mbh, X=0.7)
@@ -82,20 +86,20 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk):
     mdot=le * ledd / (eps * ct.c*ct.c)
     Mdot=le * Ledd / (eps * ct.c*ct.c)
     
-    mean_Gamma_GW = jscript.compute_torque_GW(args, disk, Mmean, Mbh)
-    mean_Gamma_noGW=jscript.compute_noGW_torque(args, disk, Mmean, Mbh)
+    mean_Gamma_GW = 1e-7 * jscript.compute_torque_GW(args, disk, Mmean, Mbh) 
+    mean_Gamma_noGW = 1e-7 * jscript.compute_noGW_torque(args, disk, Mmean, Mbh) 
 
     if winds==True:
         mbhl=jscript.BHL_accretion(args, disk, Mbh, Mmean, Mdot)
-        print(mbhl)
+        # print(mbhl)
 
         drhodr=jscript.drhodR(disk)
 
-        # mean_Gamma_wind=10**7* jscript.compute_torque_wind(disk, mbhl, Mmean)
-        mean_Gamma_wind=10**7*myscript2.gamma_wind(Mmean, disk, drhodr)
-        mean_Gamma = mean_Gamma_GW+mean_Gamma_noGW+mean_Gamma_wind
+        mean_Gamma_wind= jscript.compute_torque_wind(disk, mbhl, Mmean) 
+        #mean_Gamma_wind=10**7*myscript2.gamma_wind(Mmean, disk, drhodr)
+        mean_Gamma =  (mean_Gamma_GW+mean_Gamma_noGW+mean_Gamma_wind)
     else:
-        mean_Gamma = mean_Gamma_GW+mean_Gamma_noGW
+        mean_Gamma =  (mean_Gamma_GW+mean_Gamma_noGW)
 
     traps = myscript.mig_trap(disk, mean_Gamma_noGW) 
     traps=np.array(traps)/Rsch
@@ -157,19 +161,22 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk):
             ax.plot(R_seg, np.abs(G_seg), 'k--', label='$|\Gamma_{tot}| <0$' if i == 0 else "", color='rebeccapurple')
 
     MBH_power=np.log10(Mbh/ct.MSun)
+    power=round(np.log10(Mbh/ct.MSun),2)
 
     ax.set_xscale('log')
     ax.set_yscale('log')
     ax.set_xlabel(r'R [R$_{\rm g}$]')
-    ax.set_ylabel(r'$|\Gamma|$ [cgs]')
-    # ax.set_ylim([1e25,1e44])
-    ax.set_title(f'Migration Torques ($SMBH = 10^{MBH_power:.1f}$'r'${M_{\odot}})$')
+    ax.set_ylabel(r'$|\Gamma|$ [kg]')
+    ax.set_ylim([1e22,1e35])
+    ax.set_title(f'Migration Torques ($SMBH = 10^{power}$'r'${M_{\odot}})$')
     ax.legend()
     plt.tight_layout()
     if args.DT  == "TQM":
         plt.savefig(f'Torques/TQM/Mbh_{np.log10(Mbh/ct.MSun):.1f}_{args.DT}_{args.TT}_{args.gen}_wind_MP.pdf', format='pdf', dpi=300)
     elif args.DT == "SG":
-        plt.savefig(f'Torques/SG/Mbh_{np.log10(Mbh/ct.MSun):.1f}_alpha_{args.a}_{args.DT}_{args.TT}_{args.gen}_wind_MP_2.pdf', format='pdf', dpi=300)
+        plt.savefig(f'Torques/SG/Mbh_{np.log10(Mbh/ct.MSun):.2f}_alpha_{args.a}_{args.DT}_{args.TT}_{args.gen}_MP_2.pdf', format='pdf', dpi=300)
+    elif args.DT == "NT":
+        plt.savefig(f'Torques/NT/Mbh_{np.log10(Mbh/ct.MSun):.1f}_alpha_{args.a}_spin_{args.spin}_{args.DT}_{args.TT}_{args.gen}.pdf', format='pdf', dpi=300)
     return
 
 ################################################################################################
@@ -177,13 +184,13 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk):
 ################################################################################################
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-DT', type=str, default="SG", choices=['SG', 'TQM'])
+    parser.add_argument('-DT', type=str, default="SG", choices=['SG', 'TQM', 'NT'])
     parser.add_argument('-TT', type=str, default="G23", choices=['B16', 'G23'])
     parser.add_argument('-gen', type=str, default='1g', choices=['1g', 'Ng'])
     parser.add_argument('-a', type=float, default=0.1)    # real number
     parser.add_argument('-spin', type=float, default=0.9)
     parser.add_argument('-N', type=int, default=5000) # integer number
-    parser.add_argument('-c', type=int, default=693163)
+    parser.add_argument('-c', type=int, default=965665)
     parser.add_argument('-plot', action='store_true')      # truth value
     parser.add_argument('-date', action='store_true')      # truth value
     
