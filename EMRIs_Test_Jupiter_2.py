@@ -19,8 +19,6 @@ warnings.filterwarnings('ignore')
 printing=True
 plotting=True
 type_II_computation = "conservative" 
-C=693163
-Spin=0.9
 
 Fixed=True
 
@@ -50,7 +48,7 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
     alpha = args.a                   # viscosity parameter
 
     if args.DT  == "SG":
-        disk = pagn.SirkoAGN(Mbh=Mbh, alpha=alpha)
+        disk = pagn.SirkoAGN(Mbh=Mbh, alpha=alpha, le=0.1)
         Rmin = disk.Rmin
         Rmax = disk.Rmax
     elif args.DT  == "TQM":
@@ -471,9 +469,9 @@ if __name__ == '__main__':
         file.write(f"gen = {args.gen}\n")
         file.write(f"N = {args.N}\n")
         if Fixed==True:
-            file.write(f'M_smbh = {np.log10(MBH[C]):.3f}\n')
-            file.write(f'Spin = {Spin}\n')
-            file.write(f'T = {T[C]/(1e6*ct.yr):.3e}\n')
+            file.write(f'M_smbh = {np.log10(MBH[args.c]):.3f}\n')
+            file.write(f'Spin = {args.spin}\n')
+            file.write(f'T = {T[args.c]/(1e6*ct.yr):.3e}\n')
         file.write(f"\n")
         file.write(f"Data:\n")
         if Fixed==True:

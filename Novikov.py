@@ -8,7 +8,7 @@ from os import makedirs
 import pandas as pd
 
 class NovikovThorneAGN:
-    def __init__(self, Mbh=1e8*ct.MSun, spin=0.9, alpha=0.01, mdot=0.1, eps=0.1, le=None, b=0,
+    def __init__(self, Mbh=1e6*ct.MSun, spin=0.9, alpha=0.01, mdot=None, eps=0.1, le=0.1, b=0,
                 X=0.7, printing=True):
         """ Class that creates an AGN disc object using the equations for Novikov-Thorne disk (1973) from Abramowicz and Fragile 2003.
 
@@ -50,12 +50,14 @@ class NovikovThorneAGN:
         if mdot==None and le==None:
             raise ValueError('Please provide an accretion rate or Eddington ratio!')
         elif le==None:
-            le=mdot*eps
+            le=mdot
         elif mdot==None:
-            mdot=le/eps
+            mdot=le
         
         self.mdot=mdot
         self.le=le
+
+        self.Mdot=self.mdot * jscript.Ledd(self.Mbh, self.X)/(0.1*ct.c*ct.c)
 
         self.Rs = 2 * self.Mbh * ct.G / (ct.c ** 2)
         self.Rmin = jscript.R_isco_function(self.Mbh, self.spin)
@@ -271,8 +273,6 @@ class NovikovThorneAGN:
         self.cs=np.array(css)
 
         self.tauV=self.kappa*self.rho*self.h
-
-        self.Mdot=self.mdot * jscript.Ledd(self.Mbh, self.X)
 
         self.Omega = np.sqrt(ct.G * self.Mbh / (self.R*self.R*self.R))
         Teff4 = 3 * self.Mdot * (1 - np.sqrt(self.Rmin / self.R)) * self.Omega * self.Omega / (8 * np.pi)
