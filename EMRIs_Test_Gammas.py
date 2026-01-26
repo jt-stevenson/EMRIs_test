@@ -19,7 +19,7 @@ warnings.filterwarnings('ignore')
 printing=False
 plotting=True
 type_II_computation = "conservative" 
-C=121606
+C=965665
 Spin=0.9
 
 Fixed=True
@@ -43,12 +43,13 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk):
 
     if Fixed==False:
         c = np.random.randint(0, len(MBH))
+        Mbh = MBH[c] * ct.MSun
         spin=np.random.rand()
     if Fixed==True:
         c=args.c
         spin=args.spin
     
-    Mbh = MBH[c] * ct.MSun    # M_SMBH
+    Mbh = 4e6 * ct.MSun    # M_SMBH
     T = T[c] * 1e6 * ct.yr           # disk lifetime
     alpha = args.a                   # viscosity parameter
 
@@ -79,9 +80,6 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk):
 
     ledd=jscript.Ledd(Mmean, X=0.7)
     Ledd=jscript.Ledd(Mbh, X=0.7)
-
-    le=0.1
-    eps=0.1
 
     Mdot=disk.Mdot #* Ledd / (eps)
     print(Mdot)
@@ -173,7 +171,7 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk):
     if args.DT  == "TQM":
         plt.savefig(f'Torques/TQM/Mbh_{np.log10(Mbh/ct.MSun):.1f}_{args.DT}_{args.TT}_{args.gen}_wind_MP.pdf', format='pdf', dpi=300)
     elif args.DT == "SG":
-        plt.savefig(f'Torques/SG/Mbh_{np.log10(Mbh/ct.MSun):.2f}_alpha_{args.a}_{args.DT}_{args.TT}_{args.gen}_confused.pdf', format='pdf', dpi=300)
+        plt.savefig(f'Torques/SG/WHAT_Mbh_{np.log10(Mbh/ct.MSun):.2f}_alpha_{args.a}_{args.DT}_{args.TT}_{args.gen}.pdf', format='pdf', dpi=300)
     elif args.DT == "NT":
         plt.savefig(f'Torques/NT/Mbh_{np.log10(Mbh/ct.MSun):.1f}_alpha_{args.a}_spin_{args.spin}_{args.DT}_{args.TT}_{args.gen}.pdf', format='pdf', dpi=300)
     return
@@ -183,13 +181,13 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk):
 ################################################################################################
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-DT', type=str, default="NT", choices=['SG', 'TQM', 'NT'])
+    parser.add_argument('-DT', type=str, default="SG", choices=['SG', 'TQM', 'NT'])
     parser.add_argument('-TT', type=str, default="G23", choices=['B16', 'G23'])
     parser.add_argument('-gen', type=str, default='1g', choices=['1g', 'Ng'])
     parser.add_argument('-a', type=float, default=0.01)    # real number
     parser.add_argument('-spin', type=float, default=0.9)
     parser.add_argument('-N', type=int, default=5000) # integer number
-    parser.add_argument('-c', type=int, default=121606)
+    parser.add_argument('-c', type=int, default=965665)
     parser.add_argument('-plot', action='store_true')      # truth value
     parser.add_argument('-date', action='store_true')      # truth value
     

@@ -22,6 +22,8 @@ SI_to_gcm3 = 1e-3
 SI_to_gcm2 = 1e-1
 SI_to_cms = 1e2
 
+K_to_eV=8.6173e-5
+
 def R_isco_function(MBH, spin):
     #function to calculate innermost stable circular orbit for a BH of given mass and spin
     R_G=G*MBH*(1/(c*c))
@@ -552,22 +554,22 @@ LISA_band_enter.direction = 0
 
 #GW torque equations - from binary_formation_eqns_V8
 
-def compute_torque_GW(args, disk, M, Mbh):
+def compute_torque_GW(disk, M, Mbh, TT):
     q = M / Mbh
 
     Gamma_GW = myscript.gamma_GW(disk.R, M, Mbh)
 
-    if args.TT=="B16": 
+    if TT=="B16": 
         return Gamma_GW
-    elif args.TT=="G23": 
+    elif TT=="G23": 
         gamma = 5/3
         return Gamma_GW 
 
-def compute_GW_torque_function(args, disk, M, Mbh):
-    Gamma_tot = compute_torque_GW(args, disk, M, Mbh)
+def compute_GW_torque_function(disk, M, Mbh, TT):
+    Gamma_tot = compute_torque_GW(disk, M, Mbh, TT)
     return interp1d(disk.R, Gamma_tot, kind='linear', fill_value='extrapolate')
 
-def compute_noGW_torque(args, disk, M, Mbh):
+def compute_noGW_torque(disk, M, Mbh, TT):
     q = M / Mbh
     
     Gamma_0 = myscript.gamma_0(q, disk.h / disk.R, 2 * disk.rho * disk.h, disk.R, disk.Omega)
@@ -579,15 +581,15 @@ def compute_noGW_torque(args, disk, M, Mbh):
     cI_jm17 = myscript.CI_jm17_tot(dSig, dT, 5/3, disk)
     Gamma_I_jm17 = cI_jm17*Gamma_0
 
-    if args.TT=="B16": 
+    if TT=="B16": 
         return Gamma_I_p10
-    elif args.TT=="G23": 
+    elif TT=="G23": 
         gamma = 5/3
         Gamma_therm = myscript.gamma_thermal(gamma, disk, q)*Gamma_0
         return Gamma_therm + Gamma_I_jm17
 
-def compute_noGW_torque_function(args, disk, M, Mbh):
-    Gamma_tot = compute_noGW_torque(args, disk, M, Mbh)
+def compute_noGW_torque_function(disk, M, Mbh, TT):
+    Gamma_tot = compute_noGW_torque(disk, M, Mbh, TT)
     return interp1d(disk.R, Gamma_tot, kind='linear', fill_value='extrapolate')
 
 # Headwind Torque Eqns from Pan and Yang 2021
@@ -622,7 +624,7 @@ def dJdR(obj, J):
     dJdR = dJdR_spline(rlog10)
     return dJdR
 
-def BHL_accretion(args, obj, MBH, mbh, Mdot):
+def BHL_accretion(obj, MBH, mbh, Mdot, alpha):
     drhodr=drhodR(obj)
 
     M = MBH * G /(c*c)
@@ -645,8 +647,7 @@ def BHL_accretion(args, obj, MBH, mbh, Mdot):
     mdot_BHL= (4 * np.pi * rho * mbh * mbh) / (vrel**2 + cs**2)**(3/2)
     return mdot_BHL
 
-def BHL_accretion2(args, obj, MBH, mbh, mdot):
-    alpha=args.a
+def BHL_accretion2(obj, MBH, mbh, mdot, alpha):
     r=obj.R
     M=MBH * G /(c*c)
 
