@@ -250,19 +250,28 @@ def gamma_GW(r, m, M, e=0.0, return_torque=True, use_reduced_mass=True):
 
     return dL_dt
 
-def gamma_wind(m, disk, gamma):
+def gamma_wind(m, disk, gamma, Mbh):
     ##from Zhen Pan, Huan Yang (2021), eq. 36
     ##initially developed by Kocsis, Yunes, Loeb (2011)
     h_ratio = disk.h / disk.R
+    sigma = 2*disk.h*disk.rho
     delta_v_phi = (3. - gamma) / 2. * h_ratio * disk.cs #eq.39a
-    delta_v_dr = 1.5 * (m / (3. * disk.Mbh))**(1./ 3.) * h_ratio**(-1.) * disk.cs #eq. 39c
-    delta_v_r = 0.0 #assuming nearly-circular orbits
-    vrel2 = (delta_v_phi + delta_v_dr)**2 + delta_v_r**2
-    R_BHL = m / (vrel2 + disk.cs**2) #Bondi radius
-    mdot_BHL = 4.0 * np.pi * disk.rho * m**2. / (vrel2 + disk.cs**2.)**1.5 #Bondi accretion rate, eq.37
+    # delta_v_phi=disk.Omega*disk.R - np.sqrt(Mbh/) to code
+    delta_v_dr = 1.5 * (m / (3. * Mbh))**(1./ 3.) * h_ratio**(-1.) * disk.cs #eq. 39c
+
+    R_G=Mbh * ct.G /(ct.c*ct.c)
+
+    vgas=-disk.Mdot/(2 * np.pi * disk.R * sigma)
+    vstar=-1.3e-6 * (m/(10*ct.MSun))/(Mbh/(1e5*ct.MSun)) * (disk.R/10*R_G)**(-3)
+
+    delta_v_r=np.abs(vgas-vstar)
+
+    vrel2 = (delta_v_phi + delta_v_dr)**2 + delta_v_r**2 
+    R_BHL = ct.G * m / (vrel2 + disk.cs**2) #Bondi radius
+    mdot_BHL =  (ct.G)**2 * 4.0 * np.pi * disk.rho * m**2. / (vrel2 + disk.cs**2.)**1.5  #Bondi accretion rate, eq.37
     R_Hill = disk.R * (m / (3. * disk.Mbh))**(1./3.)
     mdot_wind = mdot_BHL * np.minimum(1., np.minimum(disk.h/R_BHL, R_Hill/R_BHL))
-    dot_J = - disk.R * delta_v_phi * mdot_wind / m
+    dot_J = - disk.R * delta_v_phi * mdot_wind
     return dot_J
 
 
@@ -334,7 +343,7 @@ def load_file(filename):
         for header in headers: data[header] = np.array(data[header])
     return params, data
 
-def compute_torque(args, disk, M, Mbh):
+def compute_torque(disk, M, Mbh, TT):
     q = M / Mbh
 
     ## Kanagawa+2018 prescription
@@ -347,7 +356,7 @@ def compute_torque(args, disk, M, Mbh):
     #Gamma_0 = gamma_0(q, disk.h / disk.R, 2 * disk.rho * disk.h, disk.R, disk.Omega)
     Gamma_0 = gamma_0(q, disk.h / disk.R, Sigma_reduced, disk.R, disk.Omega)
     Gamma_GW = gamma_GW(disk.R, M, Mbh)
-    Gamma_wind = gamma_wind(M, disk, 5/3)
+    Gamma_wind = gamma_wind(M, disk, 5/3, Mbh)
 
     dSig = dSigmadR_reduced(disk, Sigma_reduced)
     dT = dTdR(disk)
@@ -357,9 +366,9 @@ def compute_torque(args, disk, M, Mbh):
     cL = CL(dSig, dT, 5/3, disk)
     Gamma_I_jm17 = (cL + cI_jm17)*Gamma_0
 
-    if args.TT=="B16": 
+    if TT=="B16": 
         return Gamma_I_p10 ##+ Gamma_GW
-    elif args.TT=="G23": 
+    elif TT=="G23": 
         gamma = 5/3
         Gamma_therm = gamma_thermal(gamma, disk, q)*Gamma_0
         return Gamma_therm + Gamma_I_jm17 + Gamma_wind + Gamma_GW
