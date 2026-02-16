@@ -250,13 +250,28 @@ def gamma_GW(r, m, M, e=0.0, return_torque=True, use_reduced_mass=True):
 
     return dL_dt
 
-def gamma_wind(m, disk, gamma, Mbh):
+def Ledd(MBH, X):
+    kappa=0.2 * (1+X)
+    Ledd= (4 * np.pi * ct.G * MBH * ct.c) /kappa
+    return Ledd
+
+def mdot_damped(m, disk, gamma, r):
     ##from Zhen Pan, Huan Yang (2021), eq. 36
     ##initially developed by Kocsis, Yunes, Loeb (2011)
+    ##combining equations 3-7 from Chen, Ren, Dai (2023)
+
+    ledd=Ledd(m, 0.7)
+
+    Mbh=disk.Mbh
+    Mdot=disk.Mdot
+
+    alpha=disk.alpha
+
+    m_edd=ledd/(ct.c**2)
+
     h_ratio = disk.h / disk.R
     sigma = 2*disk.h*disk.rho
     delta_v_phi = (3. - gamma) / 2. * h_ratio * disk.cs #eq.39a
-    # delta_v_phi=disk.Omega*disk.R - np.sqrt(Mbh/) to code
     delta_v_dr = 1.5 * (m / (3. * Mbh))**(1./ 3.) * h_ratio**(-1.) * disk.cs #eq. 39c
 
     R_G=Mbh * ct.G /(ct.c*ct.c)
@@ -267,10 +282,57 @@ def gamma_wind(m, disk, gamma, Mbh):
     delta_v_r=np.abs(vgas-vstar)
 
     vrel2 = (delta_v_phi + delta_v_dr)**2 + delta_v_r**2 
-    R_BHL = ct.G * m / (vrel2 + disk.cs**2) #Bondi radius
-    mdot_BHL =  (ct.G)**2 * 4.0 * np.pi * disk.rho * m**2. / (vrel2 + disk.cs**2.)**1.5  #Bondi accretion rate, eq.37
+
     R_Hill = disk.R * (m / (3. * disk.Mbh))**(1./3.)
-    mdot_wind = mdot_BHL * np.minimum(1., np.minimum(disk.h/R_BHL, R_Hill/R_BHL))
+    R_BHL = ct.G * m / (vrel2 + disk.cs**2) #Bondi radius
+
+    #eqn 6 from Chen Ren Dai
+    r_rel=np.minimum(R_BHL, R_Hill)
+    Rd_gap= 0.21 * (m/Mbh)**(1/2) * (disk.h/disk.R)**(-3/4) * alpha**(-1/4) * disk.R
+
+    rho=[]
+
+    for i in range(0, len(r_rel)):
+        if r_rel[i]>Rd_gap[i]:
+            rho.append(disk.rho[i])
+        elif r_rel[i]<Rd_gap[i]:
+            rho_d_gap= disk.rho[i] * 1/(1+ (0.04 * (m/Mbh)**2 * (disk.h[i]/disk.R[i])**(-5) * alpha**(-1)))
+            rho.append(rho_d_gap)
+
+    rho=np.array(rho)
+
+    mdot_BHL =  (ct.G)**2 * 4.0 * np.pi * rho * m**2. / (vrel2 + disk.cs**2.)**1.5  #Bondi accretion rate, eq.37
+
+    mdot_inflow=mdot_BHL * np.minimum(1., np.minimum(disk.h/R_BHL, R_Hill/R_BHL))
+
+    #eqn 7 from Chen Ren Dai
+    r_obd=(vrel2**(1/2) * r_rel)**2 /(ct.G * m) 
+    vk=(ct.G * m /r_obd)**(1/2)
+    Qco = 2 * alpha * (disk.h/r_obd)**3 * vk**3 /(ct.G * mdot_inflow)
+
+    mdot_obd=[]
+
+    for i in range(0, len(Qco)):
+        if Qco[i]>=1:
+            mdot_obd.append(mdot_inflow[i])
+        elif Qco[i]<1:
+            mdot_damp=2 * alpha * (disk.h[i]/r_obd[i])**3 * vk[i]**3 /(ct.G)
+            mdot_obd.append(mdot_damp)
+
+    mdot_obd=np.array(mdot_obd)
+    Mdot_flux = Mdot * np.abs(1-vstar/vgas)
+
+    mdot_wind = np.minimum(mdot_obd, Mdot_flux)
+    return mdot_wind
+
+def gamma_wind(m, disk, gamma):
+    ##from Zhen Pan, Huan Yang (2021), eq. 36
+    ##initially developed by Kocsis, Yunes, Loeb (2011)
+    h_ratio = disk.h / disk.R
+    delta_v_phi = (3. - gamma) / 2. * h_ratio * disk.cs #eq.39a
+
+    mdot_wind = mdot_damped(m, disk, gamma, disk.R)
+
     dot_J = - disk.R * delta_v_phi * mdot_wind
     return dot_J
 
