@@ -6,6 +6,8 @@ import binary_formation_distribution_V8 as myscript
 from scipy.interpolate import interp1d
 
 import pagn
+import powerlaw
+import imf
 from os import makedirs
 import pandas as pd
 
@@ -559,11 +561,7 @@ def compute_torque_GW(disk, M, Mbh, TT):
 
     Gamma_GW = myscript.gamma_GW(disk.R, M, Mbh)
 
-    if TT=="B16": 
-        return Gamma_GW
-    elif TT=="G23": 
-        gamma = 5/3
-        return Gamma_GW 
+    return Gamma_GW 
 
 def compute_GW_torque_function(disk, M, Mbh, TT):
     Gamma_tot = compute_torque_GW(disk, M, Mbh, TT)
@@ -637,7 +635,7 @@ def BHL_accretion(obj, MBH, mbh, Mdot, alpha):
     hr = h / r
 
     deltav_psi=hr*cs*(3-drhodr)/2
-    deltav_dr=3/2 * (mbh/(3*MBH))**(1/3) * (1/hr) * cs
+    deltav_dr= 3/2 * (mbh/(3*MBH))**(1/3) * (1/hr) * cs
 
     vgas=-Mdot/(2 * np.pi * r * sigma)
     vstar=-1.3e-6 * (mbh/(10*MSun))/(MBH/(1e5*MSun)) * (r/10*M)**(-3)
@@ -944,3 +942,142 @@ def NTvsSG_disc_solver_smooth(MBH_power, spin, alpha, mdot, eps, le, steps, path
         if save_to_file==True:
             plt.savefig(f'{mypath}all_profiles_with_TQM_smooth.pdf')
         plt.show()
+
+
+
+def T_align(disk, Mbh, mbh, cos_i, H, R):
+    i=np.arccos(cos_i)
+    cos_i2=np.cos(i/2)
+    sin_i2=np.sin(i/2)
+    t_orb=2*np.pi*(R)**(2/3) * (G * Mbh)**(-1/2)
+    t_align= (t_orb * Mbh**2)/(2*mbh*disk.Mdisk) * cos_i2 * (sin_i2**2 + H/(4*R))**2
+    return t_align
+
+def cluster_df(cluster, R, cos_i, disk):
+    # print(f'cluster:{cluster}\n R:{R}\n cosi:{cos_i}\n disk:{disk}')
+    Mbh=disk.Mbh
+
+    R_g=Mbh * G /(c*c)
+
+    d = {"mbh [Msun]": cluster, 'r [Rg]': R/R_g, 'cos_i': cos_i}
+    df=pd.DataFrame(data=d)
+
+    f=interp1d(disk.R, disk.h, kind='linear', fill_value='extrapolate')
+    h_clust=f(df['r [Rg]'] * R_g)
+
+    df["H/R"]=h_clust/(df['r [Rg]'] * R_g)
+    df['H']=h_clust
+
+    mbh=df['mbh [Msun]']*MSun
+
+    i=np.arccos(cos_i)
+    cos_i2=np.cos(i/2)
+    sin_i2=np.sin(i/2)
+
+    t_orb=2*np.pi*(df['r [Rg]'] * R_g)**(2/3) * (G * Mbh)**(-1/2)
+    # t_align= (t_orb * Mbh**2)/(2*mbh*disk.Mdisk) * cos_i2 * (sin_i2**2 + df['H']/(4*df['r [Rg]']*R_g))**2
+    t_align=T_align(disk, Mbh, mbh, df['cos_i'], df['H'], df['r [Rg]'])
+
+    df['t_align [yrs]']=t_align/(365*24*60*60)
+
+    p=1-np.exp((-(1e7*365*24*60*60)/(t_align)))
+    df['p_align']=p
+
+    return df
+
+def cluster_sampling(MBH_digit, MBH_power, alpha, eps, spin, le, DT, BIMF, save):
+
+    Mbh=Mbh=MBH_digit * 10**MBH_power * MSun
+
+    Ledd=Ledd(Mbh, X=0.7)
+    Mdot_edd = Ledd / (eps.c ** 2)
+    Mdot = le * Mdot_edd
+
+    # mdot=Mdot/Mdot_edd
+    # print(mdot)
+
+    if DT=="SG":
+        disk = pagn.SirkoAGN(Mbh=Mbh, alpha=alpha, le=le, eps=eps)
+        # disk = pagn.SirkoAGN(Mbh=Mbh)
+        Rmin = disk.Rmin
+        Rmax = disk.Rmax
+        disk.solve_disk()
+
+    R_g=Mbh * G /(c*c)
+
+    Rmax=0.1 * pc * (Mbh/(1e6 * MSun))**(1/2)
+
+    cluster=[]
+    cluster_mass=2 * Mbh/MSun
+
+    if BIMF=='Tagawa':
+    #Tagawa et al 2020 BIMF
+        cluster_tagawa = imf.make_cluster(cluster_mass, massfunc='salpeter', alpha=2.3, mmin=0.1, mmax=140)
+        for mass in cluster_tagawa:
+            if mass<20:
+                continue
+            elif 20<=mass<40:
+                mass_bh=mass/4
+            elif 40<=mass<=55:
+                mass_bh=10
+            elif 55<=mass<=120:
+                mass_bh=mass/13 + 5.77
+            else:
+                mass_bh=15
+            cluster.append(mass_bh)
+        bh_mass_tot=np.sum(cluster)
+        print(f'Total bh mass is {bh_mass_tot}')
+
+    elif BIMF=='Bartos':
+    #Bartos et al 2017 BIMF
+        bartos_cluster=imf.make_cluster(0.04*cluster_mass, massfunc='salpeter', alpha=2, mmin=5, mmax=50)
+        cluster=bartos_cluster
+        print(f'Total bh mass is {np.sum(cluster)}')
+
+    elif BIMF=='Vaccaro':
+    #Actually from Iorio et al 2023, but file provided by MP Vaccaro
+        mass_tot=0
+        mass_sec=np.genfromtxt("BHs_single_Zsun_rapid_nospin.dat",usecols=(0),skip_header=3,unpack=True)
+        while mass_tot<0.04*cluster_mass:
+            c = np.random.randint(0, len(mass_sec))
+            cluster.append(mass_sec[c])
+            mass_tot+=mass_sec[c]
+        print(f'Total bh mass is {np.sum(cluster)}')
+
+    a=powerlaw.Power_Law(alpha=2.5, xmin=12*R_g, xmax=Rmax)
+        # print(np.max(a.rvs(len(iorio_bhs))))
+    R=a.generate_random(len(cluster))
+
+    cos_i=np.random.uniform(-1.0, 1.0, len(cluster))
+    df=cluster_df(cluster, R, cos_i, disk)
+
+    if save==True:
+        df.to_csv(f'EMRI_Rates/{BIMF}/dataframes/{DT}_{MBH_digit}e{MBH_power}_alpha_{alpha}_eps_{eps}_le_{le}_spin_{spin}.csv')
+    return df
+
+def plot_cluster(df, MBH_digit, MBH_power, alpha, eps, le, spin, BIMF, t_agn, DT, save=False):
+    plt.figure(figsize=(6, 8))
+    plt.scatter(df['r [Rg]'], df['mbh [Msun]'], c=df['t_align [yrs]']/t_agn, cmap='gist_rainbow', norm='log')
+    plt.xscale('log')
+    plt.colorbar(label="$t_{align}/t_{AGN}$", orientation="horizontal")
+    # plt.clim(0,1)
+    plt.xscale('log')
+    plt.xlabel(r'$R~[R_g]$')
+    plt.ylabel(r'$mbh~[M_{\odot}]$')
+    plt.title('$t_{align}/t_{AGN},~$' f'SMBH={MBH_digit}e{MBH_power}'r'$M_{\odot}, ~\alpha$' f'$={alpha},~e={eps},~l_e={le},~X={spin}$')
+    if save==True:
+        plt.savefig(f'EMRI_Rates/{BIMF}/t_align_{DT}_{MBH_digit}e{MBH_power}_alpha_{alpha}_eps_{eps}_le_{le}_spin_{spin}.png')
+    plt.show()
+
+    plt.figure(figsize=(6, 8))
+    plt.scatter(df['r [Rg]'], df['mbh [Msun]'], c=df['p_align'], cmap='gist_rainbow')
+    plt.xscale('log')
+    plt.colorbar(label="$p_{align}$", orientation="horizontal")
+    plt.clim(0,1)
+    plt.xscale('log')
+    plt.xlabel(r'$R~[R_g]$')
+    plt.ylabel(r'$mbh~[M_{\odot}]$')
+    plt.title('$p_{align},~$' f'SMBH={MBH_digit}e{MBH_power}'r'$M_{\odot}, ~\alpha$' f'$={alpha},~e={eps},~l_e={le},~X={spin}$')
+    if save==True:
+        plt.savefig(f'EMRI_Rates/{BIMF}/p_align_{DT}_{MBH_digit}e{MBH_power}_alpha_{alpha}_eps_{eps}_le_{le}_spin_{spin}.png')
+    plt.show()

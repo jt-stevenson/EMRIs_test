@@ -27,7 +27,7 @@ Fixed=True
 winds=True
 
 import binary_formation_distribution_V8 as myscript
-import binary_formation_distribution_V10 as myscript2
+import binary_formation_distribution_V11 as myscript2
 import NT_disk_Eqns_V1 as jscript
 import Novikov
 
@@ -48,8 +48,8 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk):
     if Fixed==True:
         c=args.c
         spin=args.spin
+        Mbh = 4e6 * ct.MSun    # M_SMBH
     
-    Mbh = 4e6 * ct.MSun    # M_SMBH
     T = T[c] * 1e6 * ct.yr           # disk lifetime
     alpha = args.a                   # viscosity parameter
 

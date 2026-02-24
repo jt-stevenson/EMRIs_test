@@ -418,7 +418,7 @@ def compute_torque(disk, M, Mbh, TT):
     #Gamma_0 = gamma_0(q, disk.h / disk.R, 2 * disk.rho * disk.h, disk.R, disk.Omega)
     Gamma_0 = gamma_0(q, disk.h / disk.R, Sigma_reduced, disk.R, disk.Omega)
     Gamma_GW = gamma_GW(disk.R, M, Mbh)
-    Gamma_wind = gamma_wind(M, disk, 5/3, Mbh)
+    Gamma_wind = gamma_wind(M, disk, 5/3)
 
     dSig = dSigmadR_reduced(disk, Sigma_reduced)
     dT = dTdR(disk)
@@ -436,7 +436,7 @@ def compute_torque(disk, M, Mbh, TT):
         return Gamma_therm + Gamma_I_jm17 + Gamma_wind + Gamma_GW
 
 def compute_torque_function(args, disk, M, Mbh):
-    Gamma_tot = compute_torque(args, disk, M, Mbh)
+    Gamma_tot = compute_torque(disk, M, Mbh, args.TT)
     return interp1d(disk.R, Gamma_tot, kind='linear', fill_value='extrapolate')
 
 def compute_torque_pure_TypeI(args, disk, M, Mbh):

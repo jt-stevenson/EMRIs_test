@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import pagn.constants as ct
 import multiprocessing
 import numpy as np
+import pandas as pd
 import argparse
 import warnings
 import pagn
@@ -13,68 +14,45 @@ from datetime import datetime
 from tqdm import tqdm
 from scipy.integrate import solve_ivp
 
+import powerlaw
+from scipy.interpolate import interp1d
+
 start = datetime.now()
 warnings.filterwarnings('ignore')
 
 printing=True
 plotting=True
 type_II_computation = "conservative" 
-
 Fixed=True
 
-import binary_formation_distribution_V8 as myscript #edited to explicitly take alpha instead of disc.alpha
-import NT_disk_Eqns_V1 as jscript
+import binary_formation_distribution_V11 as myscript #edited to explicitly take alpha instead of disc.alpha
+import NT_disk_Eqns_V2 as jscript
 import Novikov
 
 ################################################################################################
 ### Simulation routine #########################################################################
 ################################################################################################xs
-def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
+def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
     # initialize random number generator for the radii and the masses
     seed = (os.getpid() + int(time.time() * 1e6)) % 2**32
     np.random.seed(seed)
-
-    # Initialization of the Disk 
-
-    if Fixed==False:
-        c = np.random.randint(0, len(MBH))
-        spin=np.random.rand()
-    if Fixed==True:
-        c=args.c
-        spin=args.spin
     
-    Mbh = MBH[c] * ct.MSun    # M_SMBH
-    T = T[c] * 1e6 * ct.yr           # disk lifetime
-    alpha = args.a                   # viscosity parameter
+    spin=args.spin
+    
+    Mbh = args.Mbh * ct.MSun    # M_SMBH
+    T = args.T * 1e6 * ct.yr # disk lifetime
+    alpha = args.a # viscosity parameter
 
-    if args.DT  == "SG":
-        disk = pagn.SirkoAGN(Mbh=Mbh, alpha=alpha, le=0.1)
-        Rmin = disk.Rmin
-        Rmax = disk.Rmax
-    elif args.DT  == "TQM":
-        Rout=1e7 * 2 * ct.G * Mbh/ct.c**2
-        sigma = (200 * 1e3) * (Mbh / (1.3e8*ct.MSun)) ** (1 / 4.24)
-        Mdot_out = 320*(ct.MSun/ct.yr)*(Rout/(95*ct.pc)) * (sigma/(188e3))**2
-        disk = pagn.ThompsonAGN(Mbh=Mbh, Mdot_out=Mdot_out)
-        Rmin = disk.Rin
-        Rmax = disk.Rout
-        # print(disk.Mdot_out)
-    elif args.DT  == "NT":
-        disk = Novikov.NovikovThorneAGN(Mbh=Mbh, alpha=alpha, spin=spin)
-        Rmin = disk.Rmin
-        Rmax = disk.Rmax
-    disk.solve_disk()
+    R_g=Mbh * ct.G /(ct.c*ct.c)
 
-    if args.DT  == "TQM":
-        ledd=jscript.Ledd(Mbh, X=0.7)
-        Mdot= ledd /(ct.c**2 * 0.1)
-        alpha=Mdot/(6*np.pi * disk.h * disk.h * disk.rho * disk.cs)
-        alpha=np.mean(alpha)
-        print(f'alpha: {alpha}')
+    Rmax=disk.Rmax
+    Rmin=disk.Rmin
 
     # migrator mass
-    a = np.random.randint(0,len(mass_sec),1)
-    m1 = mass_sec[a]*ct.MSun
+    a = np.random.randint(0, N ,1)
+
+    m1 = cluster_df['mbh [Msun]'][a]*ct.MSun
+
     if args.gen=='Ng':
         mass_prim = mass_prim_vk[:, 0]
         a = np.random.randint(0,len(mass_prim))
@@ -85,6 +63,7 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
     m1=float(m1)
 
     # compute torques
+    # print(f'm1/Mbh: {m1/Mbh}')
     Gamma = myscript.compute_torque_function(args, disk, m1, Mbh) 
 
     # compute trap locations 
@@ -93,8 +72,9 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
     
     # time and initial radius
     t0 = 0
-    r0 = 10**(np.log10(Rmin) + (np.log10(innermost_trap) - np.log10(Rmin)) * np.random.rand())
-    Rg = ct.G*Mbh/ct.c**2
+    r0=cluster_df['r [Rg]'][a]*R_g
+    cos_i=cluster_df[cos_i][a]
+
     if args.gen=='Ng':
         b = np.random.randint(0, len(r_pu_1g))
         r1 = r_pu_1g[b]
@@ -102,7 +82,15 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
     
     # select as EMRI if inside innermost trap, migrating inward
     Gamma_r0 = Gamma(r0)
-    emri_flag = (Gamma_r0 < 0) ###and (r0 < innermost_trap) #NB: this condition is now enforced in extraction of r0
+    emri_flag = (Gamma_r0 < 0) and (r0 < innermost_trap) #NB: this condition is no longer enforced in extraction of r0
+
+    # Alignment timescale, Rowan et al 2024
+    f=interp1d(disk.R, disk.h, kind='linear', fill_value='extrapolate')
+    H=f(r0)
+    t_align = jscript.T_align(disk, Mbh, m1, cos_i, H, r0)
+
+    # Encounter timescale, Rowan et al 2024
+    t_enc = jscript.T_enc(Mbh, m1, r0, N, disk)
 
     # Migration timescale = L / |Gamma|
     L = m1 * np.sqrt(ct.G * Mbh * r0)
@@ -111,13 +99,9 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
     # GW inspiral time
     t_gw = (5 / 256) * (ct.c**5 / (ct.G**3)) * (r0**4) / (m1 * Mbh**2)
 
-    # inspiral happens within disk's lifetime
-    emri_within_T = min(t_migr, t_gw) < T
-
-    # for EMRIs this is not a binary quantity but depends only on SMBH spin (assumed random)
-    # spin=np.random.rand()
-    # future task - add SMBH spin distribution to draw from?
-    chi_eff = 2 * spin - 1  # in [-1, 1]
+    # alignment and inspiral happen within disk's lifetime + sbh not scattered faster than alignment
+    align = t_align < T and t_align < t_enc
+    emri_within_T = min(t_migr, t_gw) < T and align
 
     # final flag
     is_emri = emri_flag and emri_within_T
@@ -146,23 +130,23 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
     t_lisa_entry=0
     t_lisa_exit=0
 
+    t_inspiral=0
+
     M1=np.array([m1])
 
     gap = np.full(M1.shape, 'type_I', dtype='<U7')
 
     Gammas = myscript.compute_torque_function(args, disk, m1, Mbh)
-    Gammas_GW = jscript.compute_GW_torque_function(args, disk, m1, Mbh)
-    Gammas_no_GW=jscript.compute_noGW_torque_function(args, disk, m1, Mbh)
-
-    gap_event_1 = myscript.type_II_event(disk, m1, Mbh, alpha, type_II_computation)
+    gap_event_1 = myscript.type_II_event(disk, m1, Mbh)
     R_event_1=jscript.r_isco_event(Mbh, m1, spin)
 
-    print(f'SMBH {Mbh/ct.MSun:.3e} Msun and SBH {m1/ct.MSun:.3e} Msun, r0 {r0/Rg:.3e} Rg')
+    # print(f'SMBH {Mbh/ct.MSun:.3e} Msun and SBH {m1/ct.MSun:.3e} Msun, r0 {r0/R_g:.3e} Rg')
 
     GWf=jscript.GW_freq_fn(r0, Mbh, m1)
     if 1.0>GWf>0.0001:
         lisa_radii=r0
         lisa_flag=4
+        
 
     solution1 = solve_ivp(fun=myscript.rdot, 
                             t_span=[t0, T], 
@@ -177,11 +161,11 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
     t1 = solution1.t
     r1 = solution1.y[0]
 
-    #check whether "events" happened (reaching Type I migration trap or doing Type II migration, or crossing inner edge of disk)
+    #check whether "events" happened (reaching Type I migration trap or doing Type II migration, or crossing inner edge of disk or if LISA band entered/exited)
 
     # if you open a gap
     # keep integrating with Type II torque
-    if len(solution1.t_events[1]) >0:
+    if len(solution1.t_events[1])>0:
         print("SBH does type II")
         gap[0]='type_II'
         t_gap = solution1.t_events[1][0]
@@ -241,6 +225,8 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
 
                 if len(solution1_lisa_exit.t_events[0])>0: #check if sbh crosses SMBH event horizon after leaving LISA band
                     print('SBH has crossed EH')
+                    t_inspiral=t3[len(t3)-1]
+
                     t4 = np.append(t3, T)
                     r4 = np.append(r3, r3[-1])
 
@@ -252,6 +238,8 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
 
             elif len(solution1_lisa_entry.t_events[1])>0 and len(solution1_lisa_entry.t_events[0])==0: #check if sbh crosses SMBH event horizon if LISA band not left
                 print('SBH has crossed EH')
+                t_inspiral=t2[len(t2)-1]
+
                 t2 = np.append(t2, T)
                 r2 = np.append(r2, r2[-1])
 
@@ -263,98 +251,22 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
         
         elif len(solution1.t_events[2])==0 and len(solution1.t_events[3])>0: #check if sbh crosses SMBH event horizon if lisa band never entered
             print('SBH has crossed EH')
+            t_inspiral=t1[len(t1)-1]
+
             t1 = np.append(t1, T)
             r1 = np.append(r1, r1[-1])
 
-    #Jupiter Original Code...
+    #Jupiter Original Code... DRIED EMRI INVESTIGATION REMOVED FOR CLARITY
 
     #We want to find the location of the secondary (SBH) when the disc disperses to check if the signal produced is in the LISA band
     t_final=t1[len(t1)-1]
     r_final=r1[len(r1)-1]
 
-    final_time=20*T
+    if t_inspiral==0: #to edit
+        t_gw = (5 / 256) * (ct.c**5 / (ct.G**3)) * (r_final**4) / (m1 * Mbh**2)
+        t_inspiral=t_final+t_gw
 
-    print(f'input for extension {t_final}, {final_time}, {r_final}')
-
-    if emri_within_T==False and emri_flag==True:
-        print('Running trajectory beyond disc evaporation to check for "dried" EMRI...')
-        solution1_extended = solve_ivp(fun=myscript.rdot, 
-                            t_span=[t_final, final_time], 
-                            y0=[r_final],
-                            method='RK23', 
-                            events=(jscript.LISA_band_enter, R_event_1),
-                            first_step=1e3*ct.yr,
-                            rtol=1e-3,
-                            atol=1e-9,
-                            args=(m1, Gammas_GW, Mbh, traps))
-        t1 = solution1.t
-        r1 = solution1.y[0]
-        
-        if solution1_extended.t_events[0]>0: #enters LISA band
-            lisa_entry_radii=solution1_extended.y_events[0][0][0]
-            t_lisa_entry=solution1_extended.t_events[0][0]
-
-            lisa_flag=4
-
-            print(f"SBH has entered LISA band at {t_lisa_entry/(1e6*ct.yr):.3e} Myr, after Tdisc {T/(1e6*ct.yr):.3e} Myr")
-            
-            solution1_extended_entry = solve_ivp(fun=myscript.rdot, 
-                            t_span=[t_lisa_entry, final_time], 
-                            y0=[lisa_entry_radii],
-                            method='RK23', 
-                            events=(jscript.LISA_band_exit, R_event_1),
-                            first_step=1e3*ct.yr,
-                            rtol=1e-3,
-                            atol=1e-9,
-                            args=(m1, Gammas_GW, Mbh, traps))
-            
-            t2=solution1_extended_entry.t[1:]
-            r2=solution1_extended_entry.y[0][1:]
-
-            if solution1_extended_entry.t_events[0]>0: #exit LISA band
-                lisa_exit_radii=solution1_extended_entry.y_events[0][0][0]
-                t_lisa_exit=solution1_extended_entry.t_events[0][0]
-                print(f"SBH has exited LISA band at {t_lisa_exit/(1e6*ct.yr):.3e} Myr, after Tdisc {T/(1e6*ct.yr):.3e} Myr")
-
-                solution1_extended_exit = solve_ivp(fun=myscript.rdot, 
-                            t_span=[t_lisa_entry, final_time], 
-                            y0=[lisa_entry_radii],
-                            method='RK23', 
-                            events=(R_event_1),
-                            first_step=1e3*ct.yr,
-                            rtol=1e-3,
-                            atol=1e-9,
-                            args=(m1, Gammas_GW, Mbh, traps))
-                
-                t3=solution1_extended_exit.t[1:]
-                r3=solution1_extended_exit.y[0][1:]
-
-                if solution1_extended_exit.t_events[0]>0: #reaches isco after exiting LISA band
-                    print(f"SBH merged at {t3[len(t3)-1]/(1e6*ct.yr):.3e} Myr, after Tdisc {T/(1e6*ct.yr):.3e} Myr")
-                    t4 = np.append(t3, T)
-                    r4 = np.append(r3, r3[-1])
-
-                    t3=np.concatenate((t3, t4))
-                    r3=np.concatenate((r3, r4))
-
-                t2 = np.concatenate((t2, t3))
-                r2 = np.concatenate((r2, r3))
-
-            elif len(solution1_extended_entry.t_events[1])>0 and len(solution1_extended_entry.t_events[0])==0: #check if sbh crosses SMBH event horizon if LISA band not left
-                print(f"SBH merged at {t2[len(t2)-1] /(1e6*ct.yr):.3e} Myr, after Tdisc {T/(1e6*ct.yr):.3e} Myr")
-                t2 = np.append(t2, final_time)
-                r2 = np.append(r2, r2[-1])
-
-            t1 = np.concatenate((t1, t2))
-            r1 = np.concatenate((r1, r2))
-
-        elif len(solution1_extended.t_events[0])==0 and len(solution1_extended.t_events[1])>0: #check if sbh crosses SMBH event horizon if lisa band never entered
-            print(f"SBH merged at {t1[len(t1)-1]/(1e6*ct.yr):.3e} Myr, after Tdisc {T/(1e6*ct.yr):.3e} Myr")           
-            t1 = np.append(t1, final_time)
-            r1 = np.append(r1, r1[-1])
-
-        t_final=t1[len(t1)-1]
-        # r_final=r1[len(r1)-1]
+    
 
     rG=ct.G*Mbh*(1/(ct.c*ct.c))
 
@@ -362,8 +274,7 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
         print(f'SOMETHING HAS GONE WRONG! T={T/(1e6*ct.yr):.3e}!=t_final={t_final/(1e6*ct.yr):.3e}')
     
     if printing==True:
-        print(f'For SMBH {Mbh/ct.MSun:.3e} Msun and SBH {m1/ct.MSun:.3e} Msun with r0 {r0/rG:.3e} Rg, At time T={T/(1e6*ct.yr):.3e}={t_final/(1e6*ct.yr):.3e} Myrs, R_final={r_final/rG:.3e} Rg')
-        print(f"emri flag {emri_flag}, emri within T {emri_within_T}")
+        print(f' For SMBH {Mbh/ct.MSun:.3e} Msun and SBH {m1/ct.MSun:.3e} Msun with r0 {r0/rG:.3e} Rg (Rmin: {Rmin/R_g:.3e} Rg, Rmax: {Rmax/R_g:.3e} Rg) \nAt time T={T/(1e6*ct.yr):.3e}={t_final/(1e6*ct.yr):.3e} Myrs, R_final={r_final/rG:.3e} Rg\nemri flag {emri_flag}, emri within T {emri_within_T}')
     M=Mbh+m1
 
     # lisa_flag, lisa_radii=jscript.LISAband_flag(r0, r_final, Mbh, m1)
@@ -378,7 +289,6 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
 
     if r_final<r_isco:
         r_final=r_isco
-
 
     # if lisa_flag!=0:
     #     print(f'EMRI with SMBH {MBH/ct.MSun:.3e} MSun, SBH {m1/ct.MSun:.3e} MSun, SMBH spin {spin:.3e} enters LISA band at {lisa_radii/rG:.3e} R_G')
@@ -405,23 +315,21 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
     flags=inspiral_flag+Tdisc_flag+lisa_flag
 
     #assume zero eccentricity
-    if Fixed==True:
-        return f"{m1/ct.MSun:.3e} {r0/rG:.3e} {t_gw/(1e6*ct.yr):.3e} {t_migr/(1e6*ct.yr):.3e} {is_emri} {Ng} {r_final/rG:.3e} {lisa_radii/rG:.3e} {t_lisa/(1e6*ct.yr):.3e} {t_final/(1e6*ct.yr):.3e} {lisa_flag} {flags}\n"
-    elif Fixed==False:
-        return f"{np.log10(Mbh/ct.MSun):.1f} {m1/ct.MSun:.3e} {r0/rG:.3e} {chi_eff:.3e} {T/(1e6*ct.yr):.3e} {t_gw/(1e6*ct.yr):.3e} {t_migr/(1e6*ct.yr):.3e} {is_emri} {Ng} {r_final/rG:.3e} {lisa_radii/rG:.3e} {lisa_exit_radii/rG:.3e} {t_lisa/(1e6*ct.yr):.3e} {t_final/(1e6*ct.yr):.3e} {lisa_flag} {flags}\n"
-    
+    return f"{m1/ct.MSun:.3e} {r0/rG:.3e} {cos_i} {t_align/(1e6*ct.yr):.3e} {t_gw/(1e6*ct.yr):.3e} {t_migr/(1e6*ct.yr):.3e} {t_inspiral/(1e6*ct.yr):.3e} {is_emri} {Ng} {r_final/rG:.3e} {lisa_radii/rG:.3e} {t_lisa/(1e6*ct.yr):.3e} {t_final/(1e6*ct.yr):.3e} {lisa_flag} {flags}\n"    
 ################################################################################################
 ### Read parameters from input #################################################################
 ################################################################################################
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-DT', type=str, default="NT", choices=['SG', 'TQM', 'NT'])
+    parser.add_argument('-DT', type=str, default="SG", choices=['SG', 'TQM', 'NT'])
     parser.add_argument('-TT', type=str, default="G23", choices=['B16', 'G23'])
     parser.add_argument('-gen', type=str, default='1g', choices=['1g', 'Ng'])
-    parser.add_argument('-a', type=float, default=0.01)
+    parser.add_argument('-BIMF', type=str, default="Vaccaro", choices=['Vaccaro', 'Tagawa', 'NT'])
+    parser.add_argument('-a', type=float, default=0.1)
+    parser.add_argument('-le', type=float, default=0.01)
     parser.add_argument('-spin', type=float, default=0.9)    # real number
-    parser.add_argument('-N', type=int, default=5000)
-    parser.add_argument('-c', type=int, default=693163) # integer number
+    parser.add_argument('-Mbh', type=float, default=1e6)   # MSun
+    parser.add_argument('-T', type=float, default=1e7)     # Myrs
     parser.add_argument('-plot', action='store_true')      # truth value
     parser.add_argument('-date', action='store_true')      # truth value
     
@@ -434,9 +342,51 @@ def main():
 ################################################################################################
 if __name__ == '__main__':
     args=main()
-    mass_sec=np.genfromtxt("/Users/pmxks13/PhD/EMRIs_test/BHs_single_Zsun_rapid_nospin.dat",usecols=(0),skip_header=3,unpack=True)
+
+    Mbh=args.Mbh*ct.MSun
+    alpha=args.a
+    spin=args.spin
+    le=args.le
+
+    try:
+        cluster_df=pd.read_csv('fEMRI_Rates/{args.BIMF}/dataframes/{args.DT}_{Mbh}_alpha_{args.alpha}_eps_{args.eps}_le_{args.le}_spin_{args.spin}.csv')
+    except FileNotFoundError:
+        cluster_df=jscript.cluster_sampling(Mbh, args.alpha, args.spin, args.le, args.DT, args.BIMF)
+    N=len(cluster_df)
+
+    if args.DT  == "SG":
+        disk = pagn.SirkoAGN(Mbh=Mbh, alpha=alpha, le=le)
+        Rmax = disk.Rmaxs
+    elif args.DT  == "TQM":
+        Rout=1e7 * 2 * ct.G * Mbh/ct.c**2
+        sigma = (200 * 1e3) * (Mbh / (1.3e8*ct.MSun)) ** (1 / 4.24)
+        Mdot_out = 320*(ct.MSun/ct.yr)*(Rout/(95*ct.pc)) * (sigma/(188e3))**2
+        disk = pagn.ThompsonAGN(Mbh=Mbh, Mdot_out=Mdot_out)
+        Rmax = disk.Rout
+
+        ledd=jscript.Ledd(Mbh, X=0.7)
+        Mdot= ledd /(ct.c**2 * 0.1)
+        alpha=Mdot/(6*np.pi * disk.h * disk.h * disk.rho * disk.cs)
+        alpha=np.mean(alpha)
+        print(f'alpha: {alpha}')
+        # print(disk.Mdot_out)
+    elif args.DT  == "NT":
+        disk = Novikov.NovikovThorneAGN(Mbh=Mbh, alpha=alpha, spin=spin)
+        Rmax = disk.Rmax
+    disk.solve_disk()
+
+    # if args.BIMF=='Vaccaro':
+    #     mass_sec=np.genfromtxt("/Users/pmxks13/PhD/EMRIs_test/BHs_single_Zsun_rapid_nospin.dat",usecols=(0),skip_header=3,unpack=True)
+    # elif args.BIMF=='Bartos':
+    #     mass_sec=np.genfromtxt("/Users/pmxks13/PhD/EMRIs_test/BHs_Bartos_exp_2.dat",usecols=(0),skip_header=3,unpack=True)
+    # elif args.BIMF=='Tagawa':
+    #     mass_sec=np.genfromtxt("/Users/pmxks13/PhD/EMRIs_test/BHs_Tagawa_exp_2.3.dat",usecols=(0),skip_header=3,unpack=True)
+
+
     mass_prim_vk = np.genfromtxt('/Users/pmxks13/PhD/EMRIs_test/Ng_catalog.txt', skip_header=1)
-    MBH, T = np.genfromtxt("/Users/pmxks13/PhD/EMRIs_test/SMBHmass_local_AGNlifetime_pairs.txt", unpack=True, skip_header=3)
+
+
+    # MBH, T = np.genfromtxt("/Users/pmxks13/PhD/EMRIs_test/SMBHmass_local_AGNlifetime_pairs.txt", unpack=True, skip_header=3)
 ################################################################################################
 
 ################################################################################################
@@ -445,11 +395,14 @@ if __name__ == '__main__':
     if printing == True:
         date_time = start.strftime("%y%m%d_%H%M%S")
 
-        dir_name = f"/Users/pmxks13/PhD/EMRIs_test/EMRIs_Jupiter_2/c_{args.c}/{args.DT}/alpha_{args.a}/spin_{args.spin}/"
+        print('printing to file...')
+
+        dir_name = f"/Users/pmxks13/PhD/EMRIs_test/EMRI_Rates/{args.BIMF}/Mbh_{args.Mbh:.1e}/{args.DT}/alpha_{args.a}/spin_{args.spin}/"
         if not os.path.exists(dir_name):
             os.makedirs(dir_name)
-        file_name = dir_name+f"/EMRIs_{args.TT}_{args.gen}_{args.N}_events_with_GW.txt"
-        file_name_1g = dir_name+f"/EMRIs_{args.TT}_1g_{args.N}_events_with_GW.txt"
+        file_name = dir_name+f"/EMRIs_{args.TT}_{args.gen}_{N}.txt"
+        print(f'file name: {file_name}')
+        file_name_1g = dir_name+f"/EMRIs_{args.TT}_1g_{N}.txt"
         if args.gen=='Ng' and  not os.path.exists(file_name_1g):
             print()
             print('There is no 1g source for this Ng simulation. Run the same simulation for 1g first!')
@@ -463,19 +416,15 @@ if __name__ == '__main__':
         file.write(f"comp_time = {0}\n")
         file.write(f"disk_type = {args.DT}\n")
         file.write(f"torque_type = {args.TT}\n")
-        file.write(f"alpha = {args.a:.3f}\n")
+        file.write(f"alpha = {args.a}\n")
         file.write(f"gen = {args.gen}\n")
-        file.write(f"N = {args.N}\n")
-        if Fixed==True:
-            file.write(f'M_smbh = {np.log10(MBH[args.c]):.3f}\n')
-            file.write(f'Spin = {args.spin}\n')
-            file.write(f'T = {T[args.c]/(1e6*ct.yr):.3e}\n')
+        file.write(f"N = {N}\n")
+        file.write(f'M_SMBH = {args.Mbh}\n')
+        file.write(f'Spin = {args.spin}\n')
+        file.write(f'T = {args.T/(1e6)}\n')
         file.write(f"\n")
         file.write(f"Data:\n")
-        if Fixed==True:
-            file.write(f"m1/Msun, r0/Rg, t_gw/Myr, t_migr/Myr, is_emri, Ng, R_final/Rg, lisa_radii/Rg, t_lisa/Myr, t_final/Myr, lisa_flag, total_flags\n")
-        elif Fixed==False:
-            file.write(f"logMBH/Msun, m1/Msun, r0/Rg, chi_eff, T/Myr, t_gw/Myr, t_migr/Myr, is_emri, Ng, R_final/Rg, lisa_radii/Rg, lisa_exit_radii/Rg, t_lisa/Myr, t_final/Myr, lisa_flag, total_flags\n")
+        file.write(f"m1/Msun, r0/Rg, cos_i, t_align/Myr, t_gw/Myr, t_migr/Myr, t_inspiral/Myr, is_emri, Ng, R_final/Rg, lisa_radii/Rg, t_lisa/Myr, t_final/Myr, lisa_flag, total_flags\n")
 ################################################################################################
 
 ################################################################################################
@@ -493,7 +442,7 @@ if __name__ == '__main__':
 ################################################################################################
         print()
         N_batches = 10
-        N_iter = int(args.N)
+        N_iter = int(N)
         chunk_size = int(N_iter/N_batches)
 
         # run parallel simulations and print results in file
@@ -501,7 +450,7 @@ if __name__ == '__main__':
         with multiprocessing.Pool(os.cpu_count()) as pool:
             with tqdm(total=N_iter) as pbar:
                 for i in range(N_batches):
-                    input_data = [(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g) for _ in range(chunk_size)]
+                    input_data = [(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N) for _ in range(chunk_size)]
                     results = pool.starmap(iteration, input_data)
                     if len(results) != chunk_size:
                         print(f"[Warning] Batch {i} returned {len(results)} runs instead of {chunk_size}")
@@ -521,6 +470,7 @@ if __name__ == '__main__':
                 file.writelines(f"comp_time   = {comp_time}\n")
             else: file.writelines(l)
         file.close()
+        print(f'file {file_name} closed.')
 ################################################################################################
 
 
