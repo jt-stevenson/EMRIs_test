@@ -83,8 +83,8 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk):
 
     Mdot=disk.Mdot #* Ledd / (eps)
     print(Mdot)
-    mean_Gamma_GW = jscript.compute_torque_GW(args, disk, Mmean, Mbh) 
-    mean_Gamma_noGW =  jscript.compute_noGW_torque(args, disk, Mmean, Mbh) 
+    mean_Gamma_GW = jscript.compute_torque_GW(disk, Mmean, Mbh, args.TT) 
+    mean_Gamma_noGW =  jscript.compute_noGW_torque(disk, Mmean, Mbh, args.TT) 
 
     if winds==True:
         mbhl=jscript.BHL_accretion(args, disk, Mbh, Mmean, Mdot)

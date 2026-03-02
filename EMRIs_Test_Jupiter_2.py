@@ -415,7 +415,7 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk, r_pu_1g):
 ################################################################################################
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-DT', type=str, default="NT", choices=['SG', 'TQM', 'NT'])
+    parser.add_argument('-DT', type=str, default="SG", choices=['SG', 'TQM', 'NT'])
     parser.add_argument('-TT', type=str, default="G23", choices=['B16', 'G23'])
     parser.add_argument('-gen', type=str, default='1g', choices=['1g', 'Ng'])
     parser.add_argument('-a', type=float, default=0.01)

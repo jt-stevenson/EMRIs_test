@@ -72,8 +72,8 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
     
     # time and initial radius
     t0 = 0
-    r0=cluster_df['r [Rg]'][a]*R_g
-    cos_i=cluster_df[cos_i][a]
+    r0=float(cluster_df['r [Rg]'][a]*R_g)
+    cos_i=float(cluster_df['cos_i'][a])
 
     if args.gen=='Ng':
         b = np.random.randint(0, len(r_pu_1g))
@@ -86,10 +86,11 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
 
     # Alignment timescale, Rowan et al 2024
     f=interp1d(disk.R, disk.h, kind='linear', fill_value='extrapolate')
-    H=f(r0)
-    t_align = jscript.T_align(disk, Mbh, m1, cos_i, H, r0)
+    h=f(r0)
+    t_align = jscript.T_align(disk, Mbh, m1, cos_i, h, r0)
 
     # Encounter timescale, Rowan et al 2024
+    # print(f'Mbh: {Mbh}, m1: {m1}, r0: {r0}, cos_i: {cos_i}, N: {N}, disk: {disk}')
     t_enc = jscript.T_enc(Mbh, m1, r0, N, disk)
 
     # Migration timescale = L / |Gamma|
@@ -100,8 +101,11 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
     t_gw = (5 / 256) * (ct.c**5 / (ct.G**3)) * (r0**4) / (m1 * Mbh**2)
 
     # alignment and inspiral happen within disk's lifetime + sbh not scattered faster than alignment
-    align = t_align < T and t_align < t_enc
-    emri_within_T = min(t_migr, t_gw) < T and align
+
+    # print(f't_align: {float(t_align)/(365*24*60*60*1e6)} Myr, t_enc: {float(t_enc)/(365*24*60*60*1e6)} Myr')
+    align = t_align < T
+    not_scattered = t_align < t_enc
+    emri_within_T = min(t_migr, t_gw) < T and align and not_scattered
 
     # final flag
     is_emri = emri_flag and emri_within_T
@@ -118,8 +122,11 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
 
     if is_emri==True:
         is_EMRI=2
+        print(f'\n * EMRI FOUND! * \nStarting SBH {m1/ct.MSun:.3e} Msun, r0 {r0/R_g:.3e} Rg...')
     elif is_emri==False:
         is_EMRI=0
+        print(f'SBH {m1/ct.MSun:.3e} Msun, r0 {r0/R_g:.1e} Rg is not an EMRI, trap at {innermost_trap/R_g:.1e} Rg, quitting...', end='\r')
+        return
 
     # code frankesteined in from binary_formation_distribution_V8 by Jupiter, Some Original Code
 
@@ -140,19 +147,19 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
     gap_event_1 = myscript.type_II_event(disk, m1, Mbh)
     R_event_1=jscript.r_isco_event(Mbh, m1, spin)
 
-    # print(f'SMBH {Mbh/ct.MSun:.3e} Msun and SBH {m1/ct.MSun:.3e} Msun, r0 {r0/R_g:.3e} Rg')
 
     GWf=jscript.GW_freq_fn(r0, Mbh, m1)
     if 1.0>GWf>0.0001:
         lisa_radii=r0
         lisa_flag=4
-        
+
+    print(f'beginning solve for SMBH {Mbh/ct.MSun:.3e} Msun and SBH {m1/ct.MSun:.3e} Msun...')
 
     solution1 = solve_ivp(fun=myscript.rdot, 
                             t_span=[t0, T], 
                             y0=[r0],
                             method='RK23', 
-                            events=(myscript.trap_dist, gap_event_1, jscript.LISA_band_enter , R_event_1), #, Rs_event_1)
+                            events=(myscript.trap_dist, gap_event_1, jscript.LISA_band_enter, R_event_1), #, Rs_event_1)
                             first_step=1e3*ct.yr,
                             rtol=1e-3,
                             atol=1e-9,
@@ -160,6 +167,8 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
 
     t1 = solution1.t
     r1 = solution1.y[0]
+
+    print(f'first integration complete for SMBH {Mbh/ct.MSun:.3e} Msun and SBH {m1/ct.MSun:.3e} Msun')
 
     #check whether "events" happened (reaching Type I migration trap or doing Type II migration, or crossing inner edge of disk or if LISA band entered/exited)
 
@@ -272,9 +281,14 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
 
     if t_final!=T and printing==True:
         print(f'SOMETHING HAS GONE WRONG! T={T/(1e6*ct.yr):.3e}!=t_final={t_final/(1e6*ct.yr):.3e}')
+
+    if lisa_flag==0:
+        lisa_bool=False
+    if lisa_flag==4:
+        lisa_bool=True
     
     if printing==True:
-        print(f' For SMBH {Mbh/ct.MSun:.3e} Msun and SBH {m1/ct.MSun:.3e} Msun with r0 {r0/rG:.3e} Rg (Rmin: {Rmin/R_g:.3e} Rg, Rmax: {Rmax/R_g:.3e} Rg) \nAt time T={T/(1e6*ct.yr):.3e}={t_final/(1e6*ct.yr):.3e} Myrs, R_final={r_final/rG:.3e} Rg\nemri flag {emri_flag}, emri within T {emri_within_T}')
+        print(f'For SMBH {Mbh/ct.MSun:.3e} Msun and SBH {m1/ct.MSun:.3e} Msun with r0 {r0/rG:.3e} Rg (Rmin: {Rmin/R_g:.3e} Rg, Rmax: {Rmax/R_g:.3e} Rg) \nAt time T={T/(1e6*ct.yr):.3e}={t_final/(1e6*ct.yr):.3e} Myrs, R_final={r_final/rG:.3e} Rg\nemri flag {emri_flag}, emri within T {emri_within_T}, lisa detected? {lisa_bool}')
     M=Mbh+m1
 
     # lisa_flag, lisa_radii=jscript.LISAband_flag(r0, r_final, Mbh, m1)
@@ -315,7 +329,8 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
     flags=inspiral_flag+Tdisc_flag+lisa_flag
 
     #assume zero eccentricity
-    return f"{m1/ct.MSun:.3e} {r0/rG:.3e} {cos_i} {t_align/(1e6*ct.yr):.3e} {t_gw/(1e6*ct.yr):.3e} {t_migr/(1e6*ct.yr):.3e} {t_inspiral/(1e6*ct.yr):.3e} {is_emri} {Ng} {r_final/rG:.3e} {lisa_radii/rG:.3e} {t_lisa/(1e6*ct.yr):.3e} {t_final/(1e6*ct.yr):.3e} {lisa_flag} {flags}\n"    
+    print('FINISHED, WRITING TO FILE')
+    return f"{m1/ct.MSun:.3e} {r0/rG:.3e} {cos_i:.3f} {t_align/(1e6*ct.yr):.3e} {t_gw/(1e6*ct.yr):.3e} {t_migr/(1e6*ct.yr):.3e} {t_inspiral/(1e6*ct.yr):.3e} {Ng} {r_final/rG:.3e} {lisa_radii/rG:.3e} {t_lisa/(1e6*ct.yr):.3e} {t_final/(1e6*ct.yr):.3e} {lisa_flag} {flags}\n"
 ################################################################################################
 ### Read parameters from input #################################################################
 ################################################################################################
@@ -324,11 +339,11 @@ def main():
     parser.add_argument('-DT', type=str, default="SG", choices=['SG', 'TQM', 'NT'])
     parser.add_argument('-TT', type=str, default="G23", choices=['B16', 'G23'])
     parser.add_argument('-gen', type=str, default='1g', choices=['1g', 'Ng'])
-    parser.add_argument('-BIMF', type=str, default="Vaccaro", choices=['Vaccaro', 'Tagawa', 'NT'])
+    parser.add_argument('-BIMF', type=str, default="Tagawa", choices=['Vaccaro', 'Tagawa', 'NT'])
     parser.add_argument('-a', type=float, default=0.1)
     parser.add_argument('-le', type=float, default=0.01)
     parser.add_argument('-spin', type=float, default=0.9)    # real number
-    parser.add_argument('-Mbh', type=float, default=1e6)   # MSun
+    parser.add_argument('-Mbh', type=float, default=1e8)   # MSun
     parser.add_argument('-T', type=float, default=1e7)     # Myrs
     parser.add_argument('-plot', action='store_true')      # truth value
     parser.add_argument('-date', action='store_true')      # truth value
@@ -348,15 +363,13 @@ if __name__ == '__main__':
     spin=args.spin
     le=args.le
 
-    try:
-        cluster_df=pd.read_csv('fEMRI_Rates/{args.BIMF}/dataframes/{args.DT}_{Mbh}_alpha_{args.alpha}_eps_{args.eps}_le_{args.le}_spin_{args.spin}.csv')
-    except FileNotFoundError:
-        cluster_df=jscript.cluster_sampling(Mbh, args.alpha, args.spin, args.le, args.DT, args.BIMF)
-    N=len(cluster_df)
+    MBH_power=int(np.log10(args.Mbh))
+
+    print('initialising disk...')
 
     if args.DT  == "SG":
         disk = pagn.SirkoAGN(Mbh=Mbh, alpha=alpha, le=le)
-        Rmax = disk.Rmaxs
+        Rmax = disk.Rmax
     elif args.DT  == "TQM":
         Rout=1e7 * 2 * ct.G * Mbh/ct.c**2
         sigma = (200 * 1e3) * (Mbh / (1.3e8*ct.MSun)) ** (1 / 4.24)
@@ -373,7 +386,21 @@ if __name__ == '__main__':
     elif args.DT  == "NT":
         disk = Novikov.NovikovThorneAGN(Mbh=Mbh, alpha=alpha, spin=spin)
         Rmax = disk.Rmax
+    print('solving disk...')
     disk.solve_disk()
+
+    print('initialising cluster...')
+
+    # cluster_df=jscript.cluster_sampling(Mbh, args.a, args.spin, args.le, args.DT, args.BIMF)
+
+    try:
+        cluster_df=pd.read_csv(f'EMRI_Rates/{args.BIMF}/dataframes/{args.DT}_1e{MBH_power}_alpha_{args.a}_le_{args.le}_spin_{args.spin}_improved.csv')
+    except FileNotFoundError:
+        print('cluster_df not found, sampling cluster...')
+        cluster_df=jscript.cluster_sampling(Mbh, args.a, args.spin, args.le, args.DT, args.BIMF, disk, save=True)
+    N=len(cluster_df)
+
+    print(f"N: {N}")
 
     # if args.BIMF=='Vaccaro':
     #     mass_sec=np.genfromtxt("/Users/pmxks13/PhD/EMRIs_test/BHs_single_Zsun_rapid_nospin.dat",usecols=(0),skip_header=3,unpack=True)
@@ -381,11 +408,7 @@ if __name__ == '__main__':
     #     mass_sec=np.genfromtxt("/Users/pmxks13/PhD/EMRIs_test/BHs_Bartos_exp_2.dat",usecols=(0),skip_header=3,unpack=True)
     # elif args.BIMF=='Tagawa':
     #     mass_sec=np.genfromtxt("/Users/pmxks13/PhD/EMRIs_test/BHs_Tagawa_exp_2.3.dat",usecols=(0),skip_header=3,unpack=True)
-
-
     mass_prim_vk = np.genfromtxt('/Users/pmxks13/PhD/EMRIs_test/Ng_catalog.txt', skip_header=1)
-
-
     # MBH, T = np.genfromtxt("/Users/pmxks13/PhD/EMRIs_test/SMBHmass_local_AGNlifetime_pairs.txt", unpack=True, skip_header=3)
 ################################################################################################
 
@@ -409,6 +432,8 @@ if __name__ == '__main__':
             quit()
         file = open(file_name, "w")
 
+        print('writing params to file...')
+
         # print all parameters in the file
         file.write(f"Parameters:\n")
         file.write(f"version = V1\n")
@@ -424,7 +449,10 @@ if __name__ == '__main__':
         file.write(f'T = {args.T/(1e6)}\n')
         file.write(f"\n")
         file.write(f"Data:\n")
-        file.write(f"m1/Msun, r0/Rg, cos_i, t_align/Myr, t_gw/Myr, t_migr/Myr, t_inspiral/Myr, is_emri, Ng, R_final/Rg, lisa_radii/Rg, t_lisa/Myr, t_final/Myr, lisa_flag, total_flags\n")
+        file.write(f"m1/Msun, r0/Rg, cos_i, t_align/Myr, t_gw/Myr, t_migr/Myr, t_inspiral/Myr, Ng, R_final/Rg, lisa_radii/Rg, t_lisa/Myr, t_final/Myr, lisa_flag, total_flags\n")
+
+        print('params written to file...')
+        file.close()
 ################################################################################################
 
 ################################################################################################
@@ -441,7 +469,7 @@ if __name__ == '__main__':
 ### Determination of binary formation radii ####################################################
 ################################################################################################
         print()
-        N_batches = 10
+        N_batches = 100
         N_iter = int(N)
         chunk_size = int(N_iter/N_batches)
 
@@ -450,12 +478,21 @@ if __name__ == '__main__':
         with multiprocessing.Pool(os.cpu_count()) as pool:
             with tqdm(total=N_iter) as pbar:
                 for i in range(N_batches):
+                    print(f'N_batch: {i}')
+                    file = open(file_name, "a")
                     input_data = [(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N) for _ in range(chunk_size)]
                     results = pool.starmap(iteration, input_data)
+                    print(f'\n N_batch {i} complete, writing to file')
                     if len(results) != chunk_size:
                         print(f"[Warning] Batch {i} returned {len(results)} runs instead of {chunk_size}")
-                    file.writelines(results)
+                    for result in results:
+                        if result==None:
+                            pass
+                        else:
+                            file.writelines(result)
+                            file.close()
                     pbar.update(chunk_size)
+                    print('Next Chunk...')
 ################################################################################################
 
 ################################################################################################

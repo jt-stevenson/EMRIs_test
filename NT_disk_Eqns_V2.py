@@ -778,7 +778,10 @@ def T_align(disk, Mbh, mbh, cos_i, H, R):
     cos_i2=np.cos(i/2)
     sin_i2=np.sin(i/2)
     t_orb=2*np.pi*(R)**(2/3) * (G * Mbh)**(-1/2)
+
+    # print(f'torb: {t_orb}, Mbh: {Mbh}, mbh: {mbh}, mdisk: {disk.Mdisk}, h: {H}, R: {R}')
     t_align= (t_orb * Mbh**2)/(2*mbh*disk.Mdisk) * cos_i2 * (sin_i2**2 + H/(4*R))**2
+    # print(f't_align: {t_align/(365*24*60*60*1e6)} Myr')
     return t_align
 
 def T_enc(MBH, mbh, R, N, disk):
@@ -795,6 +798,8 @@ def T_enc(MBH, mbh, R, N, disk):
     zh=np.minimum(rh, h_clust)
 
     t=1/(nbh * rh * zh * vrel)
+
+    # print(f't_enc: {t/(365*24*60*60*1e6)} Myr')
     return t
 
 
@@ -837,16 +842,9 @@ def cluster_df(cluster, R, cos_i, disk):
 
     return df
 
-def cluster_sampling(MBH, alpha, spin, le, DT, BIMF, save=True):
-    eps=0.1
-    Mbh=MBH * MSun
-
-    if DT=="SG":
-        disk = pagn.SirkoAGN(Mbh=Mbh, alpha=alpha, le=le, eps=eps)
-        # disk = pagn.SirkoAGN(Mbh=Mbh)
-        Rmin = disk.Rmin
-        Rmax = disk.Rmax
-        disk.solve_disk()
+def cluster_sampling(MBH, alpha, spin, le, DT, BIMF, disk, save=True):
+    Mbh=MBH
+    power=int(np.log10(MBH/MSun))
 
     R_g=Mbh * G /(c*c)
 
@@ -870,6 +868,7 @@ def cluster_sampling(MBH, alpha, spin, le, DT, BIMF, save=True):
             else:
                 mass_bh=15
             cluster.append(mass_bh)
+            print(f'populating cluster... {len(cluster)}', end='\r')
         bh_mass_tot=np.sum(cluster)
         print(f'Total bh mass is {bh_mass_tot}')
 
@@ -884,9 +883,10 @@ def cluster_sampling(MBH, alpha, spin, le, DT, BIMF, save=True):
         mass_tot=0
         mass_sec=np.genfromtxt("BHs_single_Zsun_rapid_nospin.dat",usecols=(0),skip_header=3,unpack=True)
         while mass_tot<0.04*cluster_mass:
-            c = np.random.randint(0, len(mass_sec))
-            cluster.append(mass_sec[c])
-            mass_tot+=mass_sec[c]
+            n = np.random.randint(0, len(mass_sec))
+            cluster.append(mass_sec[n])
+            print(f'populating cluster... {len(cluster)}', end='\r')
+            mass_tot+=mass_sec[n]
         print(f'Total bh mass is {np.sum(cluster)}')
 
     T=14 * 10**9 * yr
@@ -901,7 +901,7 @@ def cluster_sampling(MBH, alpha, spin, le, DT, BIMF, save=True):
     df=cluster_df(cluster, R, cos_i, disk)
 
     if save==True:
-        df.to_csv(f'EMRI_Rates/{BIMF}/dataframes/{DT}_{MBH}_alpha_{alpha}_eps_{eps}_le_{le}_spin_{spin}_improved.csv')
+        df.to_csv(f'EMRI_Rates/{BIMF}/dataframes/{DT}_1e{power}_alpha_{alpha}_le_{le}_spin_{spin}_improved.csv')
     return df
 
 def plot_cluster(df, MBH_digit, MBH_power, alpha, eps, le, spin, BIMF, t_agn, DT, save=False):
