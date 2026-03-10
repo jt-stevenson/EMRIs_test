@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import multiprocessing
 import binary_formation_distribution_V8 as myscript
+import binary_formation_distribution_V11 as myscript2
 from scipy.interpolate import interp1d
 
 from scipy.interpolate import UnivariateSpline
@@ -889,9 +890,11 @@ def cluster_sampling(MBH, alpha, spin, le, DT, BIMF, disk, save=True):
             mass_tot+=mass_sec[n]
         print(f'Total bh mass is {np.sum(cluster)}')
 
-    T=14 * 10**9 * yr
+    T= 10**7 * yr
 
-    R_min=R_in(Mbh, np.mean(cluster) * MSun, T)
+    R_min = R_in(Mbh, np.mean(cluster) * MSun, T)
+
+    print(f'R_clust: {R_min/R_g} Rg, {R_min/pc} pc')
 
     a=powerlaw.Power_Law(alpha=2.5, xmin=R_min, xmax=Rmax)
         # print(np.max(a.rvs(len(iorio_bhs))))
@@ -901,7 +904,7 @@ def cluster_sampling(MBH, alpha, spin, le, DT, BIMF, disk, save=True):
     df=cluster_df(cluster, R, cos_i, disk)
 
     if save==True:
-        df.to_csv(f'EMRI_Rates/{BIMF}/dataframes/{DT}_1e{power}_alpha_{alpha}_le_{le}_spin_{spin}_improved.csv')
+        df.to_csv(f'EMRI_Rates/{BIMF}/dataframes/{DT}_1e{power}_alpha_{alpha}_le_{le}_spin_{spin}_N_{len(cluster)}_2.csv')
     return df
 
 def plot_cluster(df, MBH_digit, MBH_power, alpha, eps, le, spin, BIMF, t_agn, DT, save=False):
@@ -928,5 +931,76 @@ def plot_cluster(df, MBH_digit, MBH_power, alpha, eps, le, spin, BIMF, t_agn, DT
     plt.ylabel(r'$mbh~[M_{\odot}]$')
     plt.title('$p_{align},~$' f'SMBH={MBH_digit}e{MBH_power}'r'$M_{\odot}, ~\alpha$' f'$={alpha},~e={eps},~l_e={le},~X={spin}$')
     if save==True:
-        plt.savefig(f'EMRI_Rates/{BIMF}/p_align_{DT}_{MBH_digit}e{MBH_power}_alpha_{alpha}_eps_{eps}_le_{le}_spin_{spin}.png')
+        plt.savefig(f'EMRI_Rates/{BIMF}/p_align_{DT}_{MBH_digit}e{MBH_power}_alpha_{alpha}_eps_{eps}_le_{le}_spin_{spin}_3.png')
     plt.show()
+
+def plot_torques(args, disk, Mbh, mass_sec):
+    Rsch = 2 * G * Mbh / c**2
+    Rs = disk.R / Rsch
+
+    Mmean=np.mean(mass_sec)* MSun 
+
+    mean_Gamma=myscript2.compute_torque(disk, float(Mmean), Mbh, args.TT) 
+
+    traps = myscript2.mig_trap(disk, mean_Gamma) 
+    traps=np.array(traps)/Rsch
+
+    antitraps = myscript2.anti_trap(disk, mean_Gamma) 
+    antitraps=np.array(antitraps)/Rsch
+
+    T= 10**7 * yr
+    R_min = R_in(Mbh, Mmean, T)/Rsch
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    for trap in traps:
+        ax.axvline(trap *2, color='gray', linestyle=':', linewidth=1, label='Migration trap' if trap == traps[0] else "")
+    for trap in antitraps:
+        ax.axvline(trap *2, color='gray', linestyle='--', linewidth=1, label='Anti-trap'if trap == antitraps[0] else "")
+
+    ax.axvline(R_min *2, color='gray', linestyle='-', linewidth=1, label='$R_{in, cluster}$')
+
+    # Mean line: solid for Gamma > 0, dashed for Gamma < 0
+    # Split into continuous regions of positive or negative torque
+
+    sign_changes = np.where(np.diff(np.sign(mean_Gamma)) != 0)[0]
+    split_indices = np.concatenate(([0], sign_changes + 1, [len(Rs)]))
+
+    for i in range(len(split_indices) - 1):
+        start, end = split_indices[i], split_indices[i + 1]
+        R_seg = Rs[start:end] *2
+        G_seg = mean_Gamma[start:end]
+        if np.all(G_seg > 0):
+            ax.plot(R_seg, np.abs(G_seg), 'k-', label='$|\Gamma_{tot}| >0$' if i == 1 else "", color='rebeccapurple')
+        elif np.all(G_seg < 0):
+            ax.plot(R_seg, np.abs(G_seg), 'k--', label='$|\Gamma_{tot}| <0$' if i == 0 else "", color='rebeccapurple')
+
+    power=round(np.log10(Mbh/MSun))
+
+    max_gamma=round(np.log10(np.max(mean_Gamma)))+1
+    min_gamma=max_gamma-10
+
+    print(max_gamma, min_gamma)
+
+    min_gamma=10**min_gamma
+    max_gamma=10**max_gamma
+
+    print(f'{max_gamma:1e}, {min_gamma:1e}')
+    
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    ax.set_xlabel(r'R [R$_{\rm g}$]')
+    ax.set_ylabel(r'$|\Gamma|$ [cgs]')
+    ax.set_ylim(1e32,1e42)
+    ax.set_title(f'Migration Torques ($SMBH = 10^{power}$'r'${M_{\odot}})$')
+    ax.legend()
+    plt.tight_layout()
+    if args.DT  == "TQM":
+        plt.savefig(f'Torques/TQM/Antitraps_Mbh_{np.log10(Mbh/MSun):.1f}_{args.DT}_{args.TT}_{args.gen}_wind_MP.pdf', format='pdf', dpi=300)
+    elif args.DT == "SG":
+        path=f'Torques/SG/Antitraps_Mbh_{np.log10(Mbh/MSun):.2f}_alpha_{args.a}_{args.DT}_{args.TT}_{args.gen}_2.pdf'
+        print(f'Torque plot saves to {path}')
+        plt.savefig(f'{path}', format='pdf', dpi=300)
+    elif args.DT == "NT":
+        plt.savefig(f'Torques/NT/Antitraps_Mbh_{np.log10(Mbh/MSun):.1f}_alpha_{args.a}_spin_{args.spin}_{args.DT}_{args.TT}_{args.gen}.pdf', format='pdf', dpi=300)
+    return

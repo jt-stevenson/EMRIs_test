@@ -69,6 +69,10 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
     # compute trap locations 
     traps = myscript.mig_trap(disk, Gamma(disk.R)) 
     innermost_trap = traps[0] if len(traps) > 0 else Rmax
+
+    # compute trap locations 
+    antitraps = myscript.anti_trap(disk, Gamma(disk.R)) 
+    innermost_antitrap = antitraps[0] if len(antitraps) > 0 else Rmax
     
     # time and initial radius
     t0 = 0
@@ -82,7 +86,7 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
     
     # select as EMRI if inside innermost trap, migrating inward
     Gamma_r0 = Gamma(r0)
-    emri_flag = (Gamma_r0 < 0) and (r0 < innermost_trap) #NB: this condition is no longer enforced in extraction of r0
+    emri_flag = (Gamma_r0 < 0) and (r0 < innermost_antitrap) #NB: this condition is no longer enforced in extraction of r0
 
     # Alignment timescale, Rowan et al 2024
     f=interp1d(disk.R, disk.h, kind='linear', fill_value='extrapolate')
@@ -105,10 +109,10 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
     # print(f't_align: {float(t_align)/(365*24*60*60*1e6)} Myr, t_enc: {float(t_enc)/(365*24*60*60*1e6)} Myr')
     align = t_align < T
     not_scattered = t_align < t_enc
-    emri_within_T = min(t_migr, t_gw) < T and align and not_scattered
+    emri_within_T = min(t_migr, t_gw) < T
 
     # final flag
-    is_emri = emri_flag and emri_within_T
+    is_emri = emri_flag and emri_within_T and align and not_scattered
 
     if emri_flag==True:
         inspiral_flag=1
@@ -125,7 +129,7 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
         print(f'\n * EMRI FOUND! * \nStarting SBH {m1/ct.MSun:.3e} Msun, r0 {r0/R_g:.3e} Rg...')
     elif is_emri==False:
         is_EMRI=0
-        print(f'SBH {m1/ct.MSun:.3e} Msun, r0 {r0/R_g:.1e} Rg is not an EMRI, trap at {innermost_trap/R_g:.1e} Rg, quitting...', end='\r')
+        # print(f'SBH {m1/ct.MSun:.3e} Msun, r0 {r0/R_g:.1e} Rg is not an EMRI, trap at {innermost_trap/R_g:.1e} Rg, antitrap at {innermost_antitrap/R_g:.1e} Rg, {emri_flag} and {emri_within_T} and {align} and {not_scattered}, quitting...', end='\r')
         return
 
     # code frankesteined in from binary_formation_distribution_V8 by Jupiter, Some Original Code
@@ -287,8 +291,8 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
     if lisa_flag==4:
         lisa_bool=True
     
-    if printing==True:
-        print(f'For SMBH {Mbh/ct.MSun:.3e} Msun and SBH {m1/ct.MSun:.3e} Msun with r0 {r0/rG:.3e} Rg (Rmin: {Rmin/R_g:.3e} Rg, Rmax: {Rmax/R_g:.3e} Rg) \nAt time T={T/(1e6*ct.yr):.3e}={t_final/(1e6*ct.yr):.3e} Myrs, R_final={r_final/rG:.3e} Rg\nemri flag {emri_flag}, emri within T {emri_within_T}, lisa detected? {lisa_bool}')
+    # if printing==True:
+    #     print(f'For SMBH {Mbh/ct.MSun:.3e} Msun and SBH {m1/ct.MSun:.3e} Msun with r0 {r0/rG:.3e} Rg (Rmin: {Rmin/R_g:.3e} Rg, Rmax: {Rmax/R_g:.3e} Rg) \nAt time T={T/(1e6*ct.yr):.3e}={t_final/(1e6*ct.yr):.3e} Myrs, R_final={r_final/rG:.3e} Rg\nemri flag {emri_flag}, emri within T {emri_within_T}, lisa detected? {lisa_bool}')
     M=Mbh+m1
 
     # lisa_flag, lisa_radii=jscript.LISAband_flag(r0, r_final, Mbh, m1)
@@ -343,7 +347,7 @@ def main():
     parser.add_argument('-a', type=float, default=0.1)
     parser.add_argument('-le', type=float, default=0.01)
     parser.add_argument('-spin', type=float, default=0.9)    # real number
-    parser.add_argument('-Mbh', type=float, default=1e8)   # MSun
+    parser.add_argument('-Mbh', type=float, default=1e6)   # MSun
     parser.add_argument('-T', type=float, default=1e7)     # Myrs
     parser.add_argument('-plot', action='store_true')      # truth value
     parser.add_argument('-date', action='store_true')      # truth value
@@ -364,8 +368,6 @@ if __name__ == '__main__':
     le=args.le
 
     MBH_power=int(np.log10(args.Mbh))
-
-    print('initialising disk...')
 
     if args.DT  == "SG":
         disk = pagn.SirkoAGN(Mbh=Mbh, alpha=alpha, le=le)
@@ -390,17 +392,17 @@ if __name__ == '__main__':
     disk.solve_disk()
 
     print('initialising cluster...')
-
-    # cluster_df=jscript.cluster_sampling(Mbh, args.a, args.spin, args.le, args.DT, args.BIMF)
-
-    try:
-        cluster_df=pd.read_csv(f'EMRI_Rates/{args.BIMF}/dataframes/{args.DT}_1e{MBH_power}_alpha_{args.a}_le_{args.le}_spin_{args.spin}_improved.csv')
-    except FileNotFoundError:
-        print('cluster_df not found, sampling cluster...')
-        cluster_df=jscript.cluster_sampling(Mbh, args.a, args.spin, args.le, args.DT, args.BIMF, disk, save=True)
+    # try:
+    #     cluster_df=pd.read_csv(f'EMRI_Rates/{args.BIMF}/dataframes/{args.DT}_1e{MBH_power}_alpha_{args.a}_le_{args.le}_spin_{args.spin}_N_*.csv')
+    # except FileNotFoundError:
+    #     print('cluster_df not found, sampling cluster...')
+    #     cluster_df=jscript.cluster_sampling(Mbh, args.a, args.spin, args.le, args.DT, args.BIMF, disk, save=True)
+    cluster_df=jscript.cluster_sampling(Mbh, args.a, args.spin, args.le, args.DT, args.BIMF, disk, save=True)
+    
     N=len(cluster_df)
-
     print(f"N: {N}")
+
+    jscript.plot_torques(args, disk, Mbh, cluster_df['mbh [Msun]'])
 
     # if args.BIMF=='Vaccaro':
     #     mass_sec=np.genfromtxt("/Users/pmxks13/PhD/EMRIs_test/BHs_single_Zsun_rapid_nospin.dat",usecols=(0),skip_header=3,unpack=True)
@@ -425,7 +427,7 @@ if __name__ == '__main__':
             os.makedirs(dir_name)
         file_name = dir_name+f"/EMRIs_{args.TT}_{args.gen}_{N}.txt"
         print(f'file name: {file_name}')
-        file_name_1g = dir_name+f"/EMRIs_{args.TT}_1g_{N}.txt"
+        file_name_1g = dir_name+f"/EMRIs_{args.TT}_1g_{N}_2.txt"
         if args.gen=='Ng' and  not os.path.exists(file_name_1g):
             print()
             print('There is no 1g source for this Ng simulation. Run the same simulation for 1g first!')
@@ -469,7 +471,7 @@ if __name__ == '__main__':
 ### Determination of binary formation radii ####################################################
 ################################################################################################
         print()
-        N_batches = 100
+        N_batches = 10
         N_iter = int(N)
         chunk_size = int(N_iter/N_batches)
 
@@ -489,6 +491,7 @@ if __name__ == '__main__':
                         if result==None:
                             pass
                         else:
+                            file = open(file_name, "a")
                             file.writelines(result)
                             file.close()
                     pbar.update(chunk_size)
@@ -510,4 +513,8 @@ if __name__ == '__main__':
         print(f'file {file_name} closed.')
 ################################################################################################
 
+################################################################################################
+### Calculate EMRI Rates for the SMBH  #########################################################
+################################################################################################
 
+################################################################################################

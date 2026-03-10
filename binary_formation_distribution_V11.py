@@ -352,6 +352,21 @@ def mig_trap(disk, Gamma):
                 ignnum = Rs[iseg][0] / disk.Rs
     return radius_trap
 
+def anti_trap(disk, Gamma):
+    maskg = (Gamma >= 0)
+    indices = np.nonzero(maskg[1:] != maskg[:-1])[0] + 1
+    Gammas = np.split(Gamma, indices)
+    Rs = np.split(disk.R, indices)
+
+    ignnum = 0
+    radius_trap=[]
+    for iseg, seg in enumerate(Gammas):
+        if seg[0] > 0.:
+            if Rs[iseg][0] / disk.Rs > ignnum + 40:
+                radius_trap.append(Rs[iseg][0])
+                ignnum = Rs[iseg][0] / disk.Rs
+    return radius_trap
+
 
 def parse(value):
     try:

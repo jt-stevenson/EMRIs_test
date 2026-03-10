@@ -28,7 +28,7 @@ winds=True
 
 import binary_formation_distribution_V8 as myscript
 import binary_formation_distribution_V11 as myscript2
-import NT_disk_Eqns_V1 as jscript
+import NT_disk_Eqns_V2 as jscript
 import Novikov
 
 ################################################################################################
@@ -83,8 +83,8 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk):
 
     Mdot=disk.Mdot #* Ledd / (eps)
     print(Mdot)
-    mean_Gamma_GW = jscript.compute_torque_GW(disk, Mmean, Mbh, args.TT) 
-    mean_Gamma_noGW =  jscript.compute_noGW_torque(disk, Mmean, Mbh, args.TT) 
+    mean_Gamma_GW = jscript.compute_torque_GW(args, disk, Mmean, Mbh) 
+    mean_Gamma_noGW =  jscript.compute_noGW_torque(args, disk, Mmean, Mbh) 
 
     if winds==True:
         mbhl=jscript.BHL_accretion(args, disk, Mbh, Mmean, Mdot)
@@ -101,10 +101,16 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk):
     traps = myscript.mig_trap(disk, mean_Gamma_noGW) 
     traps=np.array(traps)/Rsch
 
+    antitraps = myscript2.anti_trap(disk, mean_Gamma_noGW) 
+    antitraps=np.array(antitraps)/Rsch
+
     fig, ax = plt.subplots(figsize=(8, 6))
 
     for trap in traps:
         ax.axvline(trap *2, color='gray', linestyle=':', linewidth=1, label='Migration trap' if trap == traps[0] else "")
+
+    for trap in antitraps:
+        ax.axvline(trap *2, color='gray', linestyle='--', linewidth=1, label='Anti-trap' if trap == traps[0] else "")
 
     # Mean line: solid for Gamma > 0, dashed for Gamma < 0
     # Split into continuous regions of positive or negative torque
@@ -164,14 +170,15 @@ def iteration(args, MBH, T, mass_sec, mass_prim_vk):
     ax.set_yscale('log')
     ax.set_xlabel(r'R [R$_{\rm g}$]')
     ax.set_ylabel(r'$|\Gamma|$ [cgs]')
-    ax.set_ylim([1e30,1e45])
+    ax.set_ylim([1e37,1e45])
+
     ax.set_title(f'Migration Torques ($SMBH = 10^{power}$'r'${M_{\odot}})$')
     ax.legend()
     plt.tight_layout()
     if args.DT  == "TQM":
         plt.savefig(f'Torques/TQM/Mbh_{np.log10(Mbh/ct.MSun):.1f}_{args.DT}_{args.TT}_{args.gen}_wind_MP.pdf', format='pdf', dpi=300)
     elif args.DT == "SG":
-        plt.savefig(f'Torques/SG/WHAT_Mbh_{np.log10(Mbh/ct.MSun):.2f}_alpha_{args.a}_{args.DT}_{args.TT}_{args.gen}.pdf', format='pdf', dpi=300)
+        plt.savefig(f'Torques/SG/Antitraps_Mbh_{np.log10(Mbh/ct.MSun):.2f}_alpha_{args.a}_{args.DT}_{args.TT}_{args.gen}.pdf', format='pdf', dpi=300)
     elif args.DT == "NT":
         plt.savefig(f'Torques/NT/Mbh_{np.log10(Mbh/ct.MSun):.1f}_alpha_{args.a}_spin_{args.spin}_{args.DT}_{args.TT}_{args.gen}.pdf', format='pdf', dpi=300)
     return
