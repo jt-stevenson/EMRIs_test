@@ -130,6 +130,7 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
     elif is_emri==False:
         is_EMRI=0
         # print(f'SBH {m1/ct.MSun:.3e} Msun, r0 {r0/R_g:.1e} Rg is not an EMRI, trap at {innermost_trap/R_g:.1e} Rg, antitrap at {innermost_antitrap/R_g:.1e} Rg, {emri_flag} and {emri_within_T} and {align} and {not_scattered}, quitting...', end='\r')
+        print(f'SBH {m1/ct.MSun:.3e} Msun, r0 {r0/R_g:.1e} Rg is not an EMRI, antitrap at {innermost_antitrap/R_g:.1e} Rg, quitting...', end='\r')
         return
 
     # code frankesteined in from binary_formation_distribution_V8 by Jupiter, Some Original Code
@@ -157,7 +158,7 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
         lisa_radii=r0
         lisa_flag=4
 
-    print(f'beginning solve for SMBH {Mbh/ct.MSun:.3e} Msun and SBH {m1/ct.MSun:.3e} Msun...')
+    print(f'beginning solve SBH {m1/ct.MSun:.3e} Msun...')
 
     solution1 = solve_ivp(fun=myscript.rdot, 
                             t_span=[t0, T], 
@@ -172,7 +173,7 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
     t1 = solution1.t
     r1 = solution1.y[0]
 
-    print(f'first integration complete for SMBH {Mbh/ct.MSun:.3e} Msun and SBH {m1/ct.MSun:.3e} Msun')
+    print(f'first integration complete for SBH {m1/ct.MSun:.3e} Msun')
 
     #check whether "events" happened (reaching Type I migration trap or doing Type II migration, or crossing inner edge of disk or if LISA band entered/exited)
 
@@ -347,7 +348,7 @@ def main():
     parser.add_argument('-a', type=float, default=0.1)
     parser.add_argument('-le', type=float, default=0.01)
     parser.add_argument('-spin', type=float, default=0.9)    # real number
-    parser.add_argument('-Mbh', type=float, default=1e6)   # MSun
+    parser.add_argument('-Mbh', type=float, default=4e6)   # MSun
     parser.add_argument('-T', type=float, default=1e7)     # Myrs
     parser.add_argument('-plot', action='store_true')      # truth value
     parser.add_argument('-date', action='store_true')      # truth value
@@ -392,17 +393,18 @@ if __name__ == '__main__':
     disk.solve_disk()
 
     print('initialising cluster...')
+    T_clust= 10**6 * ct.yr
     # try:
     #     cluster_df=pd.read_csv(f'EMRI_Rates/{args.BIMF}/dataframes/{args.DT}_1e{MBH_power}_alpha_{args.a}_le_{args.le}_spin_{args.spin}_N_*.csv')
     # except FileNotFoundError:
     #     print('cluster_df not found, sampling cluster...')
     #     cluster_df=jscript.cluster_sampling(Mbh, args.a, args.spin, args.le, args.DT, args.BIMF, disk, save=True)
-    cluster_df=jscript.cluster_sampling(Mbh, args.a, args.spin, args.le, args.DT, args.BIMF, disk, save=True)
+    cluster_df=jscript.cluster_sampling(Mbh, args.a, args.spin, args.le, args.DT, args.BIMF, disk, T_clust, gamma=0.5, save=True)
     
     N=len(cluster_df)
     print(f"N: {N}")
 
-    jscript.plot_torques(args, disk, Mbh, cluster_df['mbh [Msun]'])
+    jscript.plot_torques(args, disk, Mbh, cluster_df['mbh [Msun]'], T_clust)
 
     # if args.BIMF=='Vaccaro':
     #     mass_sec=np.genfromtxt("/Users/pmxks13/PhD/EMRIs_test/BHs_single_Zsun_rapid_nospin.dat",usecols=(0),skip_header=3,unpack=True)
@@ -427,7 +429,7 @@ if __name__ == '__main__':
             os.makedirs(dir_name)
         file_name = dir_name+f"/EMRIs_{args.TT}_{args.gen}_{N}.txt"
         print(f'file name: {file_name}')
-        file_name_1g = dir_name+f"/EMRIs_{args.TT}_1g_{N}_2.txt"
+        file_name_1g = dir_name+f"/EMRIs_{args.TT}_1g_{N}_3.txt"
         if args.gen=='Ng' and  not os.path.exists(file_name_1g):
             print()
             print('There is no 1g source for this Ng simulation. Run the same simulation for 1g first!')

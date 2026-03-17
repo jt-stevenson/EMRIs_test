@@ -843,7 +843,7 @@ def cluster_df(cluster, R, cos_i, disk):
 
     return df
 
-def cluster_sampling(MBH, alpha, spin, le, DT, BIMF, disk, save=True):
+def cluster_sampling(MBH, alpha, spin, le, DT, BIMF, disk, T, gamma, save=True):
     Mbh=MBH
     power=int(np.log10(MBH/MSun))
 
@@ -890,13 +890,12 @@ def cluster_sampling(MBH, alpha, spin, le, DT, BIMF, disk, save=True):
             mass_tot+=mass_sec[n]
         print(f'Total bh mass is {np.sum(cluster)}')
 
-    T= 10**7 * yr
-
     R_min = R_in(Mbh, np.mean(cluster) * MSun, T)
+    # R_min = 6*R_g
 
     print(f'R_clust: {R_min/R_g} Rg, {R_min/pc} pc')
 
-    a=powerlaw.Power_Law(alpha=2.5, xmin=R_min, xmax=Rmax)
+    a=powerlaw.Power_Law(alpha=gamma, xmin=R_min, xmax=Rmax)
         # print(np.max(a.rvs(len(iorio_bhs))))
     R=a.generate_random(len(cluster))
 
@@ -904,7 +903,7 @@ def cluster_sampling(MBH, alpha, spin, le, DT, BIMF, disk, save=True):
     df=cluster_df(cluster, R, cos_i, disk)
 
     if save==True:
-        df.to_csv(f'EMRI_Rates/{BIMF}/dataframes/{DT}_1e{power}_alpha_{alpha}_le_{le}_spin_{spin}_N_{len(cluster)}_2.csv')
+        df.to_csv(f'EMRI_Rates/{BIMF}/dataframes/{DT}_1e{power}_alpha_{alpha}_le_{le}_spin_{spin}_N_{len(cluster)}_3.csv')
     return df
 
 def plot_cluster(df, MBH_digit, MBH_power, alpha, eps, le, spin, BIMF, t_agn, DT, save=False):
@@ -934,7 +933,7 @@ def plot_cluster(df, MBH_digit, MBH_power, alpha, eps, le, spin, BIMF, t_agn, DT
         plt.savefig(f'EMRI_Rates/{BIMF}/p_align_{DT}_{MBH_digit}e{MBH_power}_alpha_{alpha}_eps_{eps}_le_{le}_spin_{spin}_3.png')
     plt.show()
 
-def plot_torques(args, disk, Mbh, mass_sec):
+def plot_torques(args, disk, Mbh, mass_sec, T):
     Rsch = 2 * G * Mbh / c**2
     Rs = disk.R / Rsch
 
@@ -948,8 +947,8 @@ def plot_torques(args, disk, Mbh, mass_sec):
     antitraps = myscript2.anti_trap(disk, mean_Gamma) 
     antitraps=np.array(antitraps)/Rsch
 
-    T= 10**7 * yr
     R_min = R_in(Mbh, Mmean, T)/Rsch
+    # R_min = 3*Rsch
 
     fig, ax = plt.subplots(figsize=(8, 6))
 
@@ -997,10 +996,8 @@ def plot_torques(args, disk, Mbh, mass_sec):
     plt.tight_layout()
     if args.DT  == "TQM":
         plt.savefig(f'Torques/TQM/Antitraps_Mbh_{np.log10(Mbh/MSun):.1f}_{args.DT}_{args.TT}_{args.gen}_wind_MP.pdf', format='pdf', dpi=300)
-    elif args.DT == "SG":
-        path=f'Torques/SG/Antitraps_Mbh_{np.log10(Mbh/MSun):.2f}_alpha_{args.a}_{args.DT}_{args.TT}_{args.gen}_2.pdf'
+    elif args.DT == "SG" or "NT":
+        path=f'Torques/{args.DT}/Antitraps_Mbh_{np.log10(Mbh/MSun):.2f}_alpha_{args.a}_{args.DT}_{args.TT}_{args.gen}_3.pdf'
         print(f'Torque plot saves to {path}')
         plt.savefig(f'{path}', format='pdf', dpi=300)
-    elif args.DT == "NT":
-        plt.savefig(f'Torques/NT/Antitraps_Mbh_{np.log10(Mbh/MSun):.1f}_alpha_{args.a}_spin_{args.spin}_{args.DT}_{args.TT}_{args.gen}.pdf', format='pdf', dpi=300)
     return
