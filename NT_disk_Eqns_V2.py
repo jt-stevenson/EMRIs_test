@@ -1,17 +1,16 @@
 import numpy as np
+import numpy.random as rand
 
 import matplotlib.pyplot as plt
-import multiprocessing
 import binary_formation_distribution_V8 as myscript
 import binary_formation_distribution_V11 as myscript2
-from scipy.interpolate import interp1d
+from scipy.interpolate import interp1d, UnivariateSpline
 
-from scipy.interpolate import UnivariateSpline
+from scipy.stats import rv_continuous
 
 import imf 
 import powerlaw
 import pandas as pd
-import pagn
 
 c = 2.99792458e8  # m/s
 G = 6.67430e-11  # m^3 kg^-1 s^-2
@@ -803,7 +802,6 @@ def T_enc(MBH, mbh, R, N, disk):
     # print(f't_enc: {t/(365*24*60*60*1e6)} Myr')
     return t
 
-
 def R_in(Mbh, mbh, T):
     M=Mbh+mbh
     Mm=Mbh*mbh
@@ -843,7 +841,127 @@ def cluster_df(cluster, R, cos_i, disk):
 
     return df
 
-def cluster_sampling(MBH, alpha, spin, le, DT, BIMF, disk, T, gamma, save=True):
+def R_I_fn(MBH, mbh, mstar, N):
+    Nstar = 2*MBH/mstar
+
+    sig = (MBH/(3.097*10**8*MSun))**(1/4) * (200 * 1000)
+    f=N/Nstar
+    m_ratio=mstar/mbh
+
+    Rh = G*MBH/(sig**2)
+    R_I = f**(4/5) * m_ratio**(-6/5) * Rh
+    return R_I
+
+def R_II_fn(MBH, mbh, mstar, N):
+    Rs = 2 * G * MBH/(c**2)
+    Nstar = 2*MBH/mstar
+
+    f=N/Nstar
+    m_ratio=mbh/mstar
+    fc=4.5e-4*(m_ratio/10)
+
+    R_II  = 4*Rs*(fc/f)**(2/5)
+
+    if R_II<4*Rs:
+        R_II=4*Rs
+    return R_II
+
+def R_GW_fn(MBH, mbh, mstar, N):
+    Rs = 2 * G * MBH/(c**2)
+    sig = (MBH/(3.097*10**8*MSun))**(1/4) * (200 * 1000)
+
+    alpha = 425 * np.pi**2 / (2048 * 2**(1/2) * 1.35 * 10) # Bortolas and Mapelli 2019
+    cp = 1.13 #Kaur et al 2024
+    m_ratio=mstar/mbh
+
+    Rh = G*MBH/(sig**2)
+
+    R_GW = Rs * (10 * alpha**(1/5) / (cp**2))**(4/3) * (m_ratio)**(-2/15) * (Rs/Rh)**(-1/3)
+    return R_GW
+
+class RomDistribution(rv_continuous):
+    def __init__(self, MBH, mbh, mstar, N):
+        self.MBH = MBH
+        self.mbh = mbh
+        self.mstar = mstar
+        self.N = N
+
+    def _pdf(self, r, approx=False):
+        MMW=4e6*MSun
+        MBH=self.MBH
+        mbh=self.mbh
+        mstar=self.mstar
+        N=self.N
+
+        Rs = 2 * G * MBH/(c**2)
+        
+        sig = (MBH/(3.097*10**8*MSun))**(1/4) * (200 * 1000) #M-𝜎 relation Ferrarese and Merrit 2000
+
+        Nstar = 2*MBH/mstar
+        alpha = 425 * np.pi**2 / (2048 * 2**(1/2) * 1.35 * 10) # Bortolas and Mapelli 2019
+        cp = 1.13 #Kaur et al 2024
+
+        f=N/Nstar
+        # print(f'f: {f}')
+        m_ratio=mbh/mstar
+        fc=4.5e-4*(m_ratio/10)
+
+        C1 = cp**2 / (alpha**(1/5) * 10)
+        C2 = (fc/f)**(4/5) 
+        if C2>0.9:
+            C2=0.9
+
+        Rh = G*MBH/(sig**2)
+        R_I = f**(4/5) * m_ratio**(6/5) * Rh
+        R_II  = 4*Rs*(fc/f)**(2/5)
+        if R_II<4*Rs:
+            R_II=4*Rs
+        R_GW = Rs * (10 * alpha**(1/5) / (cp**2))**(4/3) * (m_ratio)**(2/15) * (Rs/Rh)**(-1/3)
+        const = 1/(2*np.pi*Rh**3) * (MBH/mstar)
+
+        if approx==True:
+            print("APPROX")
+            alpha=0.11
+            Rs= 4e-7 * pc * (MBH/(MMW))
+            Rh=2*pc*(MBH/(MMW))
+            R_GW = Rs * 2e3 * (MBH/MMW)
+        
+        # print(f'r: {r/Rs:.1e} Rs, Rh: {Rh/Rs:.1e} Rs, R_I: {R_I/Rs:.1e} Rs, R_GW: {R_GW/Rs:.1e} Rs, R_II: {R_II/Rs:.1e} Rs\n')
+        
+        if R_I < r < Rh:
+            # print(f'Outer Region, r: {r/Rs:.2e} Rs')
+            n = const * f**(9/5) * (m_ratio)**(6/5) * (r/Rh)**(-4)
+        elif R_GW < r < R_I:
+            # print(f'Outside GW scheme, r: {r/Rs:.2e} Rs')
+            n = const * (m_ratio)**(-3/2) * (r/Rh)**(-7/4)
+        elif R_II < r < R_GW:
+            # print(f'Inside GW scheme, r: {r/Rs:.2e} Rs')
+            n = const * C1 * (m_ratio)**(-8/5) * (Rs/Rh)**(-3/2) * (r/Rs)**(-1)
+        elif Rs <= r < R_II:
+            # print(f'Inner Region, r: {r/Rs:.2e} Rs')
+            n = const * C2 * f**(4/5) * (m_ratio)**(-4/5) * (Rs/Rh)**(-3/2) * (r/Rs)
+        return n*r*r*np.pi*4
+    
+
+def rejection_sample(fn, minimum, maximum, M, N):
+    samples=[]
+    while len(samples)<N:
+        log_uniform_y=rand.uniform(np.log10(minimum), np.log10(maximum))
+        uniform_y=10**log_uniform_y
+        uniform_u=rand.uniform(0,1)
+        # print(uniform_u, uniform_y)
+        if uniform_u*M<fn(uniform_y):
+            # print(f'uniform_u={uniform_u} accepted')
+            samples.append(uniform_y)
+    return samples[:N]
+
+def plot_loghist(x, bins, axes, **kwargs):
+    hist, bins = np.histogram(x, bins=bins)
+    logbins = np.logspace(np.log10(bins[0]),np.log10(bins[-1]),len(bins))
+    axes.hist(x, bins=logbins, **kwargs)
+    return np.max(hist)
+
+def cluster_sampling(MBH, alpha, spin, le, DT, BIMF, RD, disk, T, gamma, save=True):
     Mbh=MBH
     power=int(np.log10(MBH/MSun))
 
@@ -895,9 +1013,12 @@ def cluster_sampling(MBH, alpha, spin, le, DT, BIMF, disk, T, gamma, save=True):
 
     print(f'R_clust: {R_min/R_g} Rg, {R_min/pc} pc')
 
-    a=powerlaw.Power_Law(alpha=gamma, xmin=R_min, xmax=Rmax)
-        # print(np.max(a.rvs(len(iorio_bhs))))
-    R=a.generate_random(len(cluster))
+    if RD=='Bartko':
+        a=powerlaw.Power_Law(alpha=gamma, xmin=R_min, xmax=Rmax)
+            # print(np.max(a.rvs(len(iorio_bhs))))
+        R=a.generate_random(len(cluster))
+    elif RD=='Rom':
+
 
     cos_i=np.random.uniform(-1.0, 1.0, len(cluster))
     df=cluster_df(cluster, R, cos_i, disk)
