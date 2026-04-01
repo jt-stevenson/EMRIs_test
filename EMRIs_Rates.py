@@ -40,7 +40,7 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
     spin=args.spin
     
     Mbh = args.Mbh * ct.MSun    # M_SMBH
-    T = args.T * 1e6 * ct.yr # disk lifetime
+    T = args.T * ct.yr # disk lifetime
     alpha = args.a # viscosity parameter
 
     R_g=Mbh * ct.G /(ct.c*ct.c)
@@ -126,10 +126,10 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
 
     if is_emri==True:
         is_EMRI=2
-        print(f'\n * EMRI FOUND! * \nStarting SBH {m1/ct.MSun:.3e} Msun, r0 {r0/R_g:.3e} Rg...')
+        print(f'* EMRI FOUND! * Starting SBH {m1/ct.MSun:.3e} Msun, r0 {r0/R_g:.3e} Rg...\n')
     elif is_emri==False:
-        is_EMRI=0
-        # print(f'SBH {m1/ct.MSun:.3e} Msun, r0 {r0/R_g:.1e} Rg is not an EMRI, trap at {innermost_trap/R_g:.1e} Rg, antitrap at {innermost_antitrap/R_g:.1e} Rg, {emri_flag} and {emri_within_T} and {align} and {not_scattered}, quitting...', end='\r')
+    #     is_EMRI=0
+    #     # print(f'SBH {m1/ct.MSun:.3e} Msun, r0 {r0/R_g:.1e} Rg is not an EMRI, trap at {innermost_trap/R_g:.1e} Rg, antitrap at {innermost_antitrap/R_g:.1e} Rg, {emri_flag} and {emri_within_T} and {align} and {not_scattered}, quitting...', end='\r')
         print(f'SBH {m1/ct.MSun:.3e} Msun, r0 {r0/R_g:.1e} Rg is not an EMRI, antitrap at {innermost_antitrap/R_g:.1e} Rg, quitting...', end='\r')
         return
 
@@ -158,7 +158,7 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
         lisa_radii=r0
         lisa_flag=4
 
-    print(f'beginning solve SBH {m1/ct.MSun:.3e} Msun...')
+    # print(f'beginning solve SBH {m1/ct.MSun:.3e} Msun...')
 
     solution1 = solve_ivp(fun=myscript.rdot, 
                             t_span=[t0, T], 
@@ -173,14 +173,14 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
     t1 = solution1.t
     r1 = solution1.y[0]
 
-    print(f'first integration complete for SBH {m1/ct.MSun:.3e} Msun')
+    # print(f'first integration complete for SBH {m1/ct.MSun:.3e} Msun')
 
     #check whether "events" happened (reaching Type I migration trap or doing Type II migration, or crossing inner edge of disk or if LISA band entered/exited)
 
     # if you open a gap
     # keep integrating with Type II torque
     if len(solution1.t_events[1])>0:
-        print("SBH does type II")
+        # print("SBH does type II")
         gap[0]='type_II'
         t_gap = solution1.t_events[1][0]
         r_gap = solution1.y_events[1][0][0]
@@ -193,7 +193,7 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
             solution1_TypeII = solve_ivp(myscript.rdot_typeII_Kanagawa2018, [t_gap, T], [r_gap],
                                      args=(M[0], disk, Mbh, alpha),
                                      first_step=1e3*ct.yr, rtol=1e-3, atol=0.0)
-        print("integration type II concluded")
+        # print("integration type II concluded")
         # Stitch the two segments 
         t1 = np.concatenate((t1, solution1_TypeII.t[1:]))     # skip duplicate t_gap
         r1 = np.concatenate((r1, solution1_TypeII.y[0][1:]))
@@ -204,7 +204,7 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
     
     else: 
         if len(solution1.t_events[2])>0: #check if sbh has entered the LISA band
-            print('SBH has entered LISA band')
+            # print('SBH has entered LISA band')
             lisa_entry_radii=solution1.y_events[2][0][0]
             t_lisa_entry=solution1.t_events[2][0]
             lisa_flag=4
@@ -221,7 +221,7 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
             r2=solution1_lisa_entry.y[0][1:]
 
             if len(solution1_lisa_entry.t_events[0])>0: #check if sbh leaves the lisa band
-                print('SBH has left LISA band')
+                # print('SBH has left LISA band')
                 lisa_exit_radii = solution1_lisa_entry.y_events[0][0][0]
                 t_lisa_exit=solution1_lisa_entry.t_events[0][0]
                 lisa_flag=4
@@ -238,7 +238,7 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
                 r3=solution1_lisa_exit.y[0][1:]
 
                 if len(solution1_lisa_exit.t_events[0])>0: #check if sbh crosses SMBH event horizon after leaving LISA band
-                    print('SBH has crossed EH')
+                    # print('SBH has crossed EH')
                     t_inspiral=t3[len(t3)-1]
 
                     t4 = np.append(t3, T)
@@ -251,7 +251,7 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
                 r2 = np.concatenate((r2, r3))
 
             elif len(solution1_lisa_entry.t_events[1])>0 and len(solution1_lisa_entry.t_events[0])==0: #check if sbh crosses SMBH event horizon if LISA band not left
-                print('SBH has crossed EH')
+                # print('SBH has crossed EH')
                 t_inspiral=t2[len(t2)-1]
 
                 t2 = np.append(t2, T)
@@ -264,7 +264,7 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
             r1 = np.concatenate((r1, r2))
         
         elif len(solution1.t_events[2])==0 and len(solution1.t_events[3])>0: #check if sbh crosses SMBH event horizon if lisa band never entered
-            print('SBH has crossed EH')
+            # print('SBH has crossed EH')
             t_inspiral=t1[len(t1)-1]
 
             t1 = np.append(t1, T)
@@ -319,7 +319,7 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
     # final_flag=1, detectable by LISA, does not inspiral within Tdisc
     # final_flag=2, inspiral w/in T_disc, undetectable by LISA
     # final_flag=4, inspirals w/in T_disc, detectable by LISA
-    final_flag=is_EMRI+lisa_flag
+    # final_flag=is_EMRI+lisa_flag
 
     t_lisa=np.abs(t_lisa)
 
@@ -334,7 +334,7 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
     flags=inspiral_flag+Tdisc_flag+lisa_flag
 
     #assume zero eccentricity
-    print('FINISHED, WRITING TO FILE')
+    # print('FINISHED, WRITING TO FILE')
     return f"{m1/ct.MSun:.3e} {r0/rG:.3e} {cos_i:.3f} {t_align/(1e6*ct.yr):.3e} {t_gw/(1e6*ct.yr):.3e} {t_migr/(1e6*ct.yr):.3e} {t_inspiral/(1e6*ct.yr):.3e} {Ng} {r_final/rG:.3e} {lisa_radii/rG:.3e} {t_lisa/(1e6*ct.yr):.3e} {t_final/(1e6*ct.yr):.3e} {lisa_flag} {flags}\n"
 ################################################################################################
 ### Read parameters from input #################################################################
@@ -342,13 +342,15 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-DT', type=str, default="SG", choices=['SG', 'TQM', 'NT'])
-    parser.add_argument('-TT', type=str, default="G23", choices=['B16', 'G23'])
+    parser.add_argument('-TT', type=str, default="B16", choices=['B16', 'G23'])
     parser.add_argument('-gen', type=str, default='1g', choices=['1g', 'Ng'])
-    parser.add_argument('-BIMF', type=str, default="Tagawa", choices=['Vaccaro', 'Tagawa', 'NT'])
+    parser.add_argument('-BIMF', type=str, default="PY", choices=['Vaccaro', 'Tagawa', 'Bartos', 'PY'])
+    parser.add_argument('-RD', type=str, default="PY", choices=['Bartko', 'Rom', "PY"])
+    parser.add_argument('-wind', type=str, default="On", choices=['On', 'Off', "Partial"])
     parser.add_argument('-a', type=float, default=0.1)
     parser.add_argument('-le', type=float, default=0.01)
-    parser.add_argument('-spin', type=float, default=0.9)    # real number
-    parser.add_argument('-Mbh', type=float, default=4e6)   # MSun
+    parser.add_argument('-spin', type=float, default=0.9)  # real number
+    parser.add_argument('-Mbh', type=float, default=1e7)   # MSun
     parser.add_argument('-T', type=float, default=1e7)     # Myrs
     parser.add_argument('-plot', action='store_true')      # truth value
     parser.add_argument('-date', action='store_true')      # truth value
@@ -399,7 +401,11 @@ if __name__ == '__main__':
     # except FileNotFoundError:
     #     print('cluster_df not found, sampling cluster...')
     #     cluster_df=jscript.cluster_sampling(Mbh, args.a, args.spin, args.le, args.DT, args.BIMF, disk, save=True)
-    cluster_df=jscript.cluster_sampling(Mbh, args.a, args.spin, args.le, args.DT, args.BIMF, disk, T_clust, gamma=0.5, save=True)
+    if args.RD=='Bartko':
+        gamma=-2.5
+    elif args.RD=='PY':
+        gamma=-1.8
+    cluster_df=jscript.cluster_sampling(Mbh, args.a, args.spin, args.le, args.DT, args.BIMF, args.RD, disk, T_clust, gamma=gamma, save=True)
     
     N=len(cluster_df)
     print(f"N: {N}")
@@ -424,12 +430,13 @@ if __name__ == '__main__':
 
         print('printing to file...')
 
-        dir_name = f"/Users/pmxks13/PhD/EMRIs_test/EMRI_Rates/{args.BIMF}/Mbh_{args.Mbh:.1e}/{args.DT}/alpha_{args.a}/spin_{args.spin}/"
-        if not os.path.exists(dir_name):
-            os.makedirs(dir_name)
-        file_name = dir_name+f"/EMRIs_{args.TT}_{args.gen}_{N}.txt"
+        dir_name = f"/Users/pmxks13/PhD/EMRIs_test/EMRI_Rates/"
+        subdir_name=dir_name+f'{args.BIMF}/Mbh_{args.Mbh:.1e}/{args.DT}/alpha_{args.a}/spin_{args.spin}/Tdisk_{args.T/(1e6)}/wind_{args.wind}/'
+        if not os.path.exists(subdir_name):
+            os.makedirs(subdir_name)
+        file_name = subdir_name+f"EMRIs_{args.TT}_{args.gen}_{N}.txt"
         print(f'file name: {file_name}')
-        file_name_1g = dir_name+f"/EMRIs_{args.TT}_1g_{N}_3.txt"
+        file_name_1g = dir_name+f"EMRIs_{args.TT}_1g_{N}_3.txt"
         if args.gen=='Ng' and  not os.path.exists(file_name_1g):
             print()
             print('There is no 1g source for this Ng simulation. Run the same simulation for 1g first!')
@@ -518,5 +525,15 @@ if __name__ == '__main__':
 ################################################################################################
 ### Calculate EMRI Rates for the SMBH  #########################################################
 ################################################################################################
+        data=myscript.load_file(file_name)
+        N_emri=len(data[1]['m1/Msun,'])
+        
+        print('printing following to summary file...')
+        print(f'MBH: {args.Mbh:.1e} MSun\nSpin: {args.spin}\nalpha: {args.a}\nle: {args.le}\nwind: {args.wind}\nTdisk: {args.T/1e6:.1f} Myrs\nDT: {args.DT}\nTT: {args.TT}\nBIMF: {args.BIMF}\nRD: {args.RD}\nN: {N}, N_emri: {N_emri}\n')
 
+        summary_file = dir_name+f"EMRI_Rates_Summary_2.txt"
+        file = open(summary_file, 'a')
+        file.write(f'{args.Mbh:.1e} {args.spin} {args.a} {args.le} {args.wind} {args.T/1e6:.1f} {args.DT} {args.TT} {args.BIMF} {args.RD} {N} {N_emri}\n')
+        file.close()
+        print(f'file {summary_file} closed, beginning next permutation.')
 ################################################################################################

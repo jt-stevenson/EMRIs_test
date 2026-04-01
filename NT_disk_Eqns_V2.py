@@ -24,6 +24,8 @@ SI_to_cms = 1e2
 
 K_to_eV=8.6173e-5
 
+print('You have ran the wrong file lol')
+
 def R_isco_function(MBH, spin):
     #function to calculate innermost stable circular orbit for a BH of given mass and spin
     R_G=G*MBH*(1/(c*c))
@@ -964,6 +966,7 @@ def plot_loghist(x, bins, axes, **kwargs):
 def cluster_sampling(MBH, alpha, spin, le, DT, BIMF, RD, disk, T, gamma, save=True):
     Mbh=MBH
     power=int(np.log10(MBH/MSun))
+    digit=Mbh/(MSun * 10**power)
 
     R_g=Mbh * G /(c*c)
 
@@ -1008,23 +1011,46 @@ def cluster_sampling(MBH, alpha, spin, le, DT, BIMF, RD, disk, T, gamma, save=Tr
             mass_tot+=mass_sec[n]
         print(f'Total bh mass is {np.sum(cluster)}')
 
-    R_min = R_in(Mbh, np.mean(cluster) * MSun, T)
-    # R_min = 6*R_g
-
-    print(f'R_clust: {R_min/R_g} Rg, {R_min/pc} pc')
+    elif BIMF=='PY':
+        #Pan and Yang 2021
+        Mstar=20*Mbh
+        delta=1e-3
+        Nstar=Mstar/(1*MSun)
+        Nbh=delta*Nstar
+        for i in range(0, int(Nbh)):
+            cluster.append(10)
+        print(f'Total bh mass is {np.sum(cluster)}')
 
     if RD=='Bartko':
-        a=powerlaw.Power_Law(alpha=gamma, xmin=R_min, xmax=Rmax)
+        R_min = R_in(Mbh, np.mean(cluster) * MSun, T)
+        print(f'R_clust: {R_min/R_g} Rg, {R_min/pc} pc')
+        a=powerlaw.Power_Law(alpha=gamma+2, xmin=R_min, xmax=Rmax)
+            # print(np.max(a.rvs(len(iorio_bhs))))
+        R=a.generate_random(len(cluster))
+    if RD=='PY':
+        R_min = 6*R_g
+        print(f'R_clust: {R_min/R_g} Rg, {R_min/pc} pc')
+        a=powerlaw.Power_Law(alpha=gamma+2, xmin=R_min, xmax=Rmax)
             # print(np.max(a.rvs(len(iorio_bhs))))
         R=a.generate_random(len(cluster))
     elif RD=='Rom':
-
+        mbh=10*MSun
+        mstar=1*MSun
+        a=RomDistribution(MBH=Mbh, mbh=mbh, mstar=mstar, N=N)
+        sig = (Mbh/(3.097*10**8*MSun))**(1/4) * (200 * 1000)
+        Rh = G*Mbh/(sig**2)
+        R_I=R_I_fn(Mbh, mbh, mstar,len(cluster))
+        if R_I<=Rh:
+            nmax=a._pdf(R_I, approx=False)
+        elif R_I>Rh:
+            nmax=a._pdf(Rh, approx=False)
+        R=rejection_sample(a._pdf, 2*R_g, Rh, nmax, len(cluster))
 
     cos_i=np.random.uniform(-1.0, 1.0, len(cluster))
     df=cluster_df(cluster, R, cos_i, disk)
 
     if save==True:
-        df.to_csv(f'EMRI_Rates/{BIMF}/dataframes/{DT}_1e{power}_alpha_{alpha}_le_{le}_spin_{spin}_N_{len(cluster)}_3.csv')
+        df.to_csv(f'EMRI_Rates/{BIMF}/dataframes/{DT}_{digit}e{power}_alpha_{alpha}_le_{le}_spin_{spin}_N_{len(cluster)}.csv')
     return df
 
 def plot_cluster(df, MBH_digit, MBH_power, alpha, eps, le, spin, BIMF, t_agn, DT, save=False):
@@ -1060,7 +1086,7 @@ def plot_torques(args, disk, Mbh, mass_sec, T):
 
     Mmean=np.mean(mass_sec)* MSun 
 
-    mean_Gamma=myscript2.compute_torque(disk, float(Mmean), Mbh, args.TT) 
+    mean_Gamma=myscript2.compute_torque(disk, float(Mmean), Mbh, args.TT, args.wind) 
 
     traps = myscript2.mig_trap(disk, mean_Gamma) 
     traps=np.array(traps)/Rsch

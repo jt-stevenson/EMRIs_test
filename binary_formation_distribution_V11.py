@@ -255,7 +255,7 @@ def Ledd(MBH, X):
     Ledd= (4 * np.pi * ct.G * MBH * ct.c) /kappa
     return Ledd
 
-def mdot_damped(m, disk, gamma, r):
+def mdot_damped(m, disk, gamma, wind):
     ##from Zhen Pan, Huan Yang (2021), eq. 36
     ##initially developed by Kocsis, Yunes, Loeb (2011)
     ##combining equations 3-7 from Chen, Ren, Dai (2023)
@@ -302,36 +302,42 @@ def mdot_damped(m, disk, gamma, r):
     rho=np.array(rho)
 
     mdot_BHL =  (ct.G)**2 * 4.0 * np.pi * rho * m**2. / (vrel2 + disk.cs**2.)**1.5  #Bondi accretion rate, eq.37
-
     mdot_inflow=mdot_BHL * np.minimum(1., np.minimum(disk.h/R_BHL, R_Hill/R_BHL))
 
-    #eqn 7 from Chen Ren Dai
-    r_obd=(vrel2**(1/2) * r_rel)**2 /(ct.G * m) 
-    vk=(ct.G * m /r_obd)**(1/2)
-    Qco = 2 * alpha * (disk.h/r_obd)**3 * vk**3 /(ct.G * mdot_inflow)
+    if wind=="On":
+        #eqn 7 from Chen Ren Dai
+        r_obd=(vrel2**(1/2) * r_rel)**2 /(ct.G * m) 
+        vk=(ct.G * m /r_obd)**(1/2)
+        Qco = 2 * alpha * (disk.h/r_obd)**3 * vk**3 /(ct.G * mdot_inflow)
 
-    mdot_obd=[]
+        mdot_obd=[]
 
-    for i in range(0, len(Qco)):
-        if Qco[i]>=1:
-            mdot_obd.append(mdot_inflow[i])
-        elif Qco[i]<1:
-            mdot_damp=2 * alpha * (disk.h[i]/r_obd[i])**3 * vk[i]**3 /(ct.G)
-            mdot_obd.append(mdot_damp)
+        for i in range(0, len(Qco)):
+            if Qco[i]>=1:
+                mdot_obd.append(mdot_inflow[i])
+            elif Qco[i]<1:
+                mdot_damp=2 * alpha * (disk.h[i]/r_obd[i])**3 * vk[i]**3 /(ct.G)
+                mdot_obd.append(mdot_damp)
 
-    mdot_obd=np.array(mdot_obd)
-    Mdot_flux = Mdot * np.abs(1-vstar/vgas)
+        mdot_obd=np.array(mdot_obd)
+        Mdot_flux = Mdot * np.abs(1-vstar/vgas)
 
-    mdot_wind = np.minimum(mdot_obd, Mdot_flux)
+        mdot_wind = np.minimum(mdot_obd, Mdot_flux)
+
+    elif wind=="Partial":
+        mdot_wind=mdot_inflow
+
+    elif wind=="Off":
+        mdot_wind=0
     return mdot_wind
 
-def gamma_wind(m, disk, gamma):
+def gamma_wind(m, disk, gamma, wind):
     ##from Zhen Pan, Huan Yang (2021), eq. 36
     ##initially developed by Kocsis, Yunes, Loeb (2011)
     h_ratio = disk.h / disk.R
     delta_v_phi = (3. - gamma) / 2. * h_ratio * disk.cs #eq.39a
 
-    mdot_wind = mdot_damped(m, disk, gamma, disk.R)
+    mdot_wind = mdot_damped(m, disk, gamma, wind)
 
     dot_J = - disk.R * delta_v_phi * mdot_wind
     return dot_J
@@ -420,11 +426,11 @@ def load_file(filename):
         for header in headers: data[header] = np.array(data[header])
     return params, data
 
-def compute_torque(disk, M, Mbh, TT):
+def compute_torque(disk, M, Mbh, TT, wind):
     q = M / Mbh
 
     ## Kanagawa+2018 prescription
-    K= q**2 / disk.alpha  / (disk.h/disk.R)**5
+    K = q**2 / disk.alpha  / (disk.h/disk.R)**5
     Sigma_reduced = 1./(1.+0.04*K) * (2. * disk.rho * disk.h)
     # NB the position of traps is now m dependent!!
     # is it true that you only pair up at low K??
@@ -433,25 +439,30 @@ def compute_torque(disk, M, Mbh, TT):
     #Gamma_0 = gamma_0(q, disk.h / disk.R, 2 * disk.rho * disk.h, disk.R, disk.Omega)
     Gamma_0 = gamma_0(q, disk.h / disk.R, Sigma_reduced, disk.R, disk.Omega)
     Gamma_GW = gamma_GW(disk.R, M, Mbh)
-    Gamma_wind = gamma_wind(M, disk, 5/3)
-
     dSig = dSigmadR_reduced(disk, Sigma_reduced)
     dT = dTdR(disk)
-    cI_p10 = CI_p10(disk, dSig, dT)
-    Gamma_I_p10 = cI_p10*Gamma_0
-    cI_jm17 = CI_jm17(dSig, dT, 5/3, disk)
-    cL = CL(dSig, dT, 5/3, disk)
-    Gamma_I_jm17 = (cL + cI_jm17)*Gamma_0
 
+    if wind=='On' or "Partial":
+        Gamma_wind = gamma_wind(M, disk, 5/3, wind)
+
+    else:
+        Gamma_wind = 0
+    
     if TT=="B16": 
-        return Gamma_I_p10 ##+ Gamma_GW
+        cI_p10 = CI_p10(disk, dSig, dT)
+        Gamma_I_p10 = cI_p10*Gamma_0
+        return Gamma_I_p10 + Gamma_GW + Gamma_wind
     elif TT=="G23": 
         gamma = 5/3
+        cI_jm17 = CI_jm17(dSig, dT, 5/3, disk)
+        cL = CL(dSig, dT, 5/3, disk)
+        Gamma_I_jm17 = (cL + cI_jm17)*Gamma_0
         Gamma_therm = gamma_thermal(gamma, disk, q)*Gamma_0
+
         return Gamma_therm + Gamma_I_jm17 + Gamma_wind + Gamma_GW
 
 def compute_torque_function(args, disk, M, Mbh):
-    Gamma_tot = compute_torque(disk, M, Mbh, args.TT)
+    Gamma_tot = compute_torque(disk, M, Mbh, args.TT, args.wind)
     return interp1d(disk.R, Gamma_tot, kind='linear', fill_value='extrapolate')
 
 def compute_torque_pure_TypeI(args, disk, M, Mbh):
