@@ -405,6 +405,8 @@ if __name__ == '__main__':
         gamma=-2.5
     elif args.RD=='PY':
         gamma=-1.8
+    elif args.RD=='Rom':
+        gamma=0
     cluster_df=jscript.cluster_sampling(Mbh, args.a, args.spin, args.le, args.DT, args.BIMF, args.RD, disk, T_clust, gamma=gamma, save=True)
     
     N=len(cluster_df)

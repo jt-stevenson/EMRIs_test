@@ -169,7 +169,10 @@ def Theta(obj):
 
 # modified by Paola Vaccaro
 def CI_p10(obj, dSigmadR, dTdR):
-    ##cI = -0.85 + 0.9*dTdR + dSigmadR #Paardekooper et al. 2010 (iso)
+    cI = -0.85 + 0.9*dTdR + dSigmadR #Paardekooper et al. 2010 (iso)
+    return cI
+
+def CI_b16(obj, dSigmadR, dTdR):
     cI_iso = gamma_iso(dSigmadR, dTdR)
     cI_ad = gamma_ad(dSigmadR, dTdR)
 
@@ -447,11 +450,17 @@ def compute_torque(disk, M, Mbh, TT, wind):
 
     else:
         Gamma_wind = 0
-    
-    if TT=="B16": 
+
+    if TT=="P10": 
         cI_p10 = CI_p10(disk, dSig, dT)
         Gamma_I_p10 = cI_p10*Gamma_0
         return Gamma_I_p10 + Gamma_GW + Gamma_wind
+
+    if TT=="B16": 
+        cI_b16 = CI_b16(disk, dSig, dT)
+        Gamma_I_b16 = cI_b16*Gamma_0
+        return Gamma_I_b16 + Gamma_GW + Gamma_wind
+    
     elif TT=="G23": 
         gamma = 5/3
         cI_jm17 = CI_jm17(dSig, dT, 5/3, disk)
@@ -520,15 +529,20 @@ def rdot_typeII_Kanagawa2018(t, y, M, disk, M_SMBH):
 
     dSig = dSigmadR(disk)
     dT = dTdR(disk)
-    cI_p10 = CI_p10(disk, dSig, dT)
-    Gamma_I_p10 = cI_p10*Gamma_0
+
     cI_jm17 = CI_jm17(dSig, dT, 5/3, disk)
     gamma = 5/3
     cL = CL(dSig, dT, gamma, disk)
     Gamma_I_jm17 = cL*Gamma_0_background + cI_jm17*Gamma_0
-
-    if args.TT=="B16": 
+    
+    if args.TT=="P10": 
+        cI_p10 = CI_p10(disk, dSig, dT)
+        Gamma_I_p10 = cI_p10*Gamma_0
         Gamma = Gamma_I_p10 ##+ Gamma_GW
+    if args.TT=="B16": 
+        cI_b16 = CI_b16(disk, dSig, dT)
+        Gamma_I_b16 = cI_b16*Gamma_0
+        Gamma = Gamma_I_b16 ##+ Gamma_GW
     elif args.TT=="G23": 
         gamma = 5/3
         Gamma_therm = gamma_thermal(gamma, disk, q)*Gamma_0
@@ -876,168 +890,4 @@ def plot_torque_vs_radius(args, disk, Mbh, mass_range, Mmean):
     plt.tight_layout()
     plt.savefig(f'gammas_frames/Mbh_{np.log10(Mbh/ct.MSun):.1f}_alpha_{args.a}_{args.DT}_{args.TT}_{args.gen}.png', format='png', dpi=300)
     return
-################################################################################################
-
-
-
-################################################################################################
-### Read parameters from input #################################################################
-################################################################################################
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-DT', type=str, default="SG", choices=['SG', 'TQM'])
-    parser.add_argument('-TT', type=str, default="G23", choices=['B16', 'G23'])
-    parser.add_argument('-gen', type=str, default='1g', choices=['1g', 'Ng'])
-    parser.add_argument('-M_SMBH', type=float, default=7)  # real number
-    parser.add_argument('-a', type=float, default=0.01)    # real number
-    parser.add_argument('-T', type=float, default=2e6)     # real number [yr]
-    parser.add_argument('-N', type=int, default=10000) # integer number
-    parser.add_argument('-plot', action='store_true')      # truth value
-    parser.add_argument('-date', action='store_true')      # truth value
-    
-    args = parser.parse_args()
-    return args
-################################################################################################
-
-
-
-################################################################################################
-### Loading information on mass distribution ###################################################
-################################################################################################
-if __name__ == '__main__':
-    args=main()
-    mass_sec=np.genfromtxt("src/BHs_single_Zsun_rapid_nospin.dat",usecols=(0),skip_header=3,unpack=True)
-    mass_prim_vk = np.genfromtxt('src/Ng_catalog.txt', skip_header=1)
-################################################################################################
-
-
-
-################################################################################################
-### Initialization of the Disk #################################################################
-################################################################################################
-    Mbh = 10**args.M_SMBH * ct.MSun  # M_SMBH
-    alpha = args.a                   # viscosity parameter
-
-    if args.DT  == "SG":
-        disk = pagn.SirkoAGN(Mbh=Mbh, alpha=alpha)
-        Rmin = disk.Rmin
-        Rmax = disk.Rmax
-    elif args.DT  == "TQM":
-        disk = pagn.ThompsonAGN(Mbh=Mbh, Mdot_out=None)
-        Rmin = disk.Rin
-        Rmax = disk.Rout
-        print(disk.Mdot_out)
-    disk.solve_disk()
-################################################################################################
-
-
-
-################################################################################################
-### Computation of migration trap positions ####################################################
-################################################################################################
-    Torque = compute_torque(args, disk, np.mean(mass_sec) * ct.MSun, Mbh)
-    ##print(np.mean(mass_sec))
-    traps = mig_trap(disk, Torque)
-
-    Torque = compute_torque_pure_TypeI(args, disk, np.mean(mass_sec) * ct.MSun, Mbh)
-    traps_pure_TypeI = mig_trap(disk, Torque)
-################################################################################################
-
-################################################################################################
-### Plot migration torques magnitudes ##########################################################
-################################################################################################
-    if plotting == True:
-        plot_torque_vs_radius(args, disk, Mbh, np.linspace(5, 50, 10) * ct.MSun, np.mean(mass_sec) * ct.MSun)
-        ##print("np.mean(mass_sec) =", np.mean(mass_sec))
-################################################################################################
-
-
-################################################################################################
-### Output file ################################################################################
-################################################################################################
-    if printing == True:
-        traps_str = ""
-        for trap in traps: traps_str += f"{trap:.1e} "
-        traps_str_pure_TypeI = ""
-        for trap in traps_pure_TypeI: traps_str_pure_TypeI += f"{trap:.1e} "
-
-        date_time = start.strftime("%y%m%d_%H%M%S")
-
-        dir_name = f"outputs_V9/{args.DT}/alpha_{args.a}/Mbh_{args.M_SMBH:.1f}"
-        if not os.path.exists(dir_name):
-            os.makedirs(dir_name)
-        file_name = dir_name+f"/pairup_radius_{args.TT}_{args.gen}.txt"
-        file_name_1g = dir_name+f"/pairup_radius_{args.TT}_1g.txt"
-        if args.gen=='Ng' and  not os.path.exists(file_name_1g):
-            print()
-            print('There is no 1g source for this Ng simulation. Run the same simulation for 1g first!')
-            quit()
-        file = open(file_name, "w")
-
-        # print all parameters in the file
-        file.write(f"Parameters:\n")
-        file.write(f"version     = V9\n")
-        file.write(f"date_time   = {date_time}\n")
-        file.write(f"comp_time   = {0}\n")
-        file.write(f"disk_type   = {args.DT}\n")
-        file.write(f"torque_type = {args.TT}\n")
-        file.write(f"log(M_SMBH) = {args.M_SMBH:.1f}\n")
-        file.write(f"alpha       = {args.a:.3f}\n")
-        file.write(f"T           = {args.T:.1e}\n")
-        file.write(f"gen         = {args.gen}\n")
-        file.write(f"N           = {args.N}\n")
-        file.write(f"R_min       = {Rmin:.1e}\n")
-        file.write(f"R_max       = {Rmax:.1e}\n")
-        file.write(f"trap_rad    = {traps_str}\n")
-        file.write(f"trap_rad_TypeI    = {traps_str_pure_TypeI}\n")
-        file.write(f"\n")
-        file.write(f"Data:\n")
-        file.write(f"r_1       r_2       m_1       m_2       r_pu      t_pu      paired      migration_1      migration_2      Ng_1      K_1      K_2\n")
-################################################################################################
-
-
-################################################################################################
-### Loading of 1g r_pu data ####################################################################
-################################################################################################
-        if args.gen=='1g':
-            r_pu_1g = np.array([])
-        if args.gen=='Ng':
-            params, data = load_file(file_name_1g)
-            r_pu_1g = data['r_pu'][data['paired']==1]
-################################################################################################
-
-################################################################################################
-### Determination of binary formation radii ####################################################
-################################################################################################
-        print()
-        N_batches = 1000
-        N_iter = int(args.N)
-        chunk_size = int(N_iter/N_batches)
-
-        # run parallel simulations and print results in file
-        #with multiprocessing.Pool(1) as pool:
-        with multiprocessing.Pool(os.cpu_count()) as pool:
-            with tqdm(total=N_iter) as pbar:
-                for i in range(N_batches):
-                    input_data = [(Rmin, Rmax, args, mass_sec, mass_prim_vk, disk, Mbh, r_pu_1g) for _ in range(chunk_size)]
-                    results = pool.starmap(iteration, input_data)
-                    if len(results) != chunk_size:
-                        print(f"[Warning] Batch {i} returned {len(results)} runs instead of {chunk_size}")
-                    file.writelines(results)
-                    pbar.update(chunk_size)
-################################################################################################
-
-
-################################################################################################
-### Write duration in file and close file ######################################################
-################################################################################################
-        file = open(file_name, "r")
-        lines = file.readlines()
-        file = open(file_name, "w")
-        for l in lines:
-            if 'comp_time' in l: 
-                comp_time = datetime.now() - start
-                file.writelines(f"comp_time   = {comp_time}\n")
-            else: file.writelines(l)
-        file.close()
 ################################################################################################

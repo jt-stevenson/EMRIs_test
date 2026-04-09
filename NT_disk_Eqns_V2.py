@@ -817,7 +817,10 @@ def cluster_df(cluster, R, cos_i, disk):
 
     R_g=Mbh * G /(c*c)
 
-    d = {"mbh [Msun]": cluster, 'r [Rg]': R/R_g, 'cos_i': cos_i}
+    for i in range(0, len(R)):
+        R[i]=R[i]/R_g
+
+    d = {"mbh [Msun]": cluster, 'r [Rg]': R, 'cos_i': cos_i}
     df=pd.DataFrame(data=d)
 
     f=interp1d(disk.R, disk.h, kind='linear', fill_value='extrapolate')
@@ -930,13 +933,13 @@ class RomDistribution(rv_continuous):
         
         # print(f'r: {r/Rs:.1e} Rs, Rh: {Rh/Rs:.1e} Rs, R_I: {R_I/Rs:.1e} Rs, R_GW: {R_GW/Rs:.1e} Rs, R_II: {R_II/Rs:.1e} Rs\n')
         
-        if R_I < r < Rh:
+        if R_I <= r < Rh:
             # print(f'Outer Region, r: {r/Rs:.2e} Rs')
             n = const * f**(9/5) * (m_ratio)**(6/5) * (r/Rh)**(-4)
-        elif R_GW < r < R_I:
+        elif R_GW <= r < R_I:
             # print(f'Outside GW scheme, r: {r/Rs:.2e} Rs')
             n = const * (m_ratio)**(-3/2) * (r/Rh)**(-7/4)
-        elif R_II < r < R_GW:
+        elif R_II <= r < R_GW:
             # print(f'Inside GW scheme, r: {r/Rs:.2e} Rs')
             n = const * C1 * (m_ratio)**(-8/5) * (Rs/Rh)**(-3/2) * (r/Rs)**(-1)
         elif Rs <= r < R_II:
@@ -1036,7 +1039,7 @@ def cluster_sampling(MBH, alpha, spin, le, DT, BIMF, RD, disk, T, gamma, save=Tr
     elif RD=='Rom':
         mbh=10*MSun
         mstar=1*MSun
-        a=RomDistribution(MBH=Mbh, mbh=mbh, mstar=mstar, N=N)
+        a=RomDistribution(MBH=Mbh, mbh=mbh, mstar=mstar, N=len(cluster))
         sig = (Mbh/(3.097*10**8*MSun))**(1/4) * (200 * 1000)
         Rh = G*Mbh/(sig**2)
         R_I=R_I_fn(Mbh, mbh, mstar,len(cluster))
@@ -1144,7 +1147,7 @@ def plot_torques(args, disk, Mbh, mass_sec, T):
     if args.DT  == "TQM":
         plt.savefig(f'Torques/TQM/Antitraps_Mbh_{np.log10(Mbh/MSun):.1f}_{args.DT}_{args.TT}_{args.gen}_wind_MP.pdf', format='pdf', dpi=300)
     elif args.DT == "SG" or "NT":
-        path=f'Torques/{args.DT}/Antitraps_Mbh_{np.log10(Mbh/MSun):.2f}_alpha_{args.a}_{args.DT}_{args.TT}_{args.gen}_3.pdf'
+        path=f'Torques/{args.DT}/Antitraps_Mbh_{np.log10(Mbh/MSun):.2f}_alpha_{args.a}_{args.DT}_{args.TT}_{args.RD}_{args.T/1e6:.1e}_{args.gen}.pdf'
         print(f'Torque plot saves to {path}')
         plt.savefig(f'{path}', format='pdf', dpi=300)
     return
