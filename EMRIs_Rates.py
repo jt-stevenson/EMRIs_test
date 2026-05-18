@@ -126,11 +126,11 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
 
     if is_emri==True:
         is_EMRI=2
-        print(f'* EMRI FOUND! * Starting SBH {m1/ct.MSun:.3e} Msun, r0 {r0/R_g:.3e} Rg...\n')
+        # print(f'* EMRI FOUND! * Starting SBH {m1/ct.MSun:.3e} Msun, r0 {r0/R_g:.3e} Rg...\n')
     elif is_emri==False:
     #     is_EMRI=0
     #     # print(f'SBH {m1/ct.MSun:.3e} Msun, r0 {r0/R_g:.1e} Rg is not an EMRI, trap at {innermost_trap/R_g:.1e} Rg, antitrap at {innermost_antitrap/R_g:.1e} Rg, {emri_flag} and {emri_within_T} and {align} and {not_scattered}, quitting...', end='\r')
-        print(f'SBH {m1/ct.MSun:.3e} Msun, r0 {r0/R_g:.1e} Rg is not an EMRI, antitrap at {innermost_antitrap/R_g:.1e} Rg, quitting...', end='\r')
+        # print(f'SBH {m1/ct.MSun:.3e} Msun, r0 {r0/R_g:.1e} Rg is not an EMRI, antitrap at {innermost_antitrap/R_g:.1e} Rg, quitting...', end='\r')
         return
 
     # code frankesteined in from binary_formation_distribution_V8 by Jupiter, Some Original Code
@@ -342,7 +342,7 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-DT', type=str, default="SG", choices=['SG', 'TQM', 'NT'])
-    parser.add_argument('-TT', type=str, default="B16", choices=['B16', 'G23'])
+    parser.add_argument('-TT', type=str, default="P10", choices=['P10', 'B16', 'G23'])
     parser.add_argument('-gen', type=str, default='1g', choices=['1g', 'Ng'])
     parser.add_argument('-BIMF', type=str, default="PY", choices=['Vaccaro', 'Tagawa', 'Bartos', 'PY'])
     parser.add_argument('-RD', type=str, default="PY", choices=['Bartko', 'Rom', "PY"])
@@ -354,6 +354,7 @@ def main():
     parser.add_argument('-T', type=float, default=1e7)     # Myrs
     parser.add_argument('-plot', action='store_true')      # truth value
     parser.add_argument('-date', action='store_true')      # truth value
+    parser.add_argument('-iter', type=int)
     
     args = parser.parse_args()
     return args
@@ -407,12 +408,12 @@ if __name__ == '__main__':
         gamma=-1.8
     elif args.RD=='Rom':
         gamma=0
-    cluster_df=jscript.cluster_sampling(Mbh, args.a, args.spin, args.le, args.DT, args.BIMF, args.RD, disk, T_clust, gamma=gamma, save=True)
+    cluster_df=jscript.cluster_sampling(Mbh, args.a, args.spin, args.le, args.DT, args.BIMF, args.RD, disk, T_clust, gamma=gamma, i=args.iter, save=True)
     
     N=len(cluster_df)
-    print(f"N: {N}")
+    print(f"N: {N}, i: {args.iter}")
 
-    jscript.plot_torques(args, disk, Mbh, cluster_df['mbh [Msun]'], T_clust)
+    # jscript.plot_torques(args, disk, Mbh, cluster_df['mbh [Msun]'], T_clust)
 
     # if args.BIMF=='Vaccaro':
     #     mass_sec=np.genfromtxt("/Users/pmxks13/PhD/EMRIs_test/BHs_single_Zsun_rapid_nospin.dat",usecols=(0),skip_header=3,unpack=True)

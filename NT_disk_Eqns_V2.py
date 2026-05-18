@@ -966,7 +966,7 @@ def plot_loghist(x, bins, axes, **kwargs):
     axes.hist(x, bins=logbins, **kwargs)
     return np.max(hist)
 
-def cluster_sampling(MBH, alpha, spin, le, DT, BIMF, RD, disk, T, gamma, save=True):
+def cluster_sampling(MBH, alpha, spin, le, DT, BIMF, RD, disk, T, gamma, i, save=True):
     Mbh=MBH
     power=int(np.log10(MBH/MSun))
     digit=Mbh/(MSun * 10**power)
@@ -1053,7 +1053,7 @@ def cluster_sampling(MBH, alpha, spin, le, DT, BIMF, RD, disk, T, gamma, save=Tr
     df=cluster_df(cluster, R, cos_i, disk)
 
     if save==True:
-        df.to_csv(f'EMRI_Rates/{BIMF}/dataframes/{DT}_{digit}e{power}_alpha_{alpha}_le_{le}_spin_{spin}_N_{len(cluster)}.csv')
+        df.to_csv(f'EMRI_Rates/{BIMF}/dataframes/{DT}_{digit}e{power}_alpha_{alpha}_le_{le}_spin_{spin}_N_{len(cluster)}_{i}.csv')
     return df
 
 def plot_cluster(df, MBH_digit, MBH_power, alpha, eps, le, spin, BIMF, t_agn, DT, save=False):

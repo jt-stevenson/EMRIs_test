@@ -61,7 +61,7 @@ def t_damp_hydro(radius, m1, h_ratio, Sigma_gas, M_SMBH):
     t_damp = np.where(i_tilde <=1, 0., (np.pi / Omega) * (1./Phi))
     return t_damp
 
-def capture_processing(disk, M, Rmin, Rmax):
+def capture_processing(args, disk, M, Rmin, Rmax):
     N=len(M)
     r0 = np.zeros(N)
     for i in range(N):
@@ -511,7 +511,7 @@ def rdot_typeII(t, y, disk):
     nu = disk.alpha * cs * h 
     return -2.0 * nu / r
 
-def rdot_typeII_Kanagawa2018(t, y, M, disk, M_SMBH):
+def rdot_typeII_Kanagawa2018(args, t, y, M, disk, M_SMBH):
     # just like rdot for Type I, but with reduced surface density
     r = float(y[0])
 
