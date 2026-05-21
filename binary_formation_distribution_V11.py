@@ -217,7 +217,8 @@ def gamma_thermal(gamma, obj, q):
     g_thermal_new = g_hot*(4*muth/(1+4*muth)) + g_cold*(2*muth/(1+2*muth))
     g_thermal[muth < 1] = g_thermal_new[muth < 1]
     decay = 1 - np.exp(-lam*obj.tauV/obj.h)
-    return g_thermal*decay *(obj.R/obj.h) ##new 1/h term wtr V7
+    return g_thermal*decay *(obj.R/obj.h) 
+
 ################################################################################################
 
 ################################################################################################

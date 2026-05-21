@@ -25,7 +25,7 @@ plotting=True
 type_II_computation = "conservative" 
 Fixed=True
 
-import binary_formation_distribution_V11 as myscript #edited to explicitly take alpha instead of disc.alpha
+import binary_formation_distribution_V12 as myscript #edited to explicitly take alpha instead of disc.alpha
 import NT_disk_Eqns_V2 as jscript
 import Novikov
 
@@ -534,7 +534,7 @@ if __name__ == '__main__':
         print('printing following to summary file...')
         print(f'MBH: {args.Mbh:.1e} MSun\nSpin: {args.spin}\nalpha: {args.a}\nle: {args.le}\nwind: {args.wind}\nTdisk: {args.T/1e6:.1f} Myrs\nDT: {args.DT}\nTT: {args.TT}\nBIMF: {args.BIMF}\nRD: {args.RD}\nN: {N}, N_emri: {N_emri}\n')
 
-        summary_file = dir_name+f"EMRI_Rates_Summary_2.txt"
+        summary_file = dir_name+f"EMRI_Rates_Summary_3.txt"
         file = open(summary_file, 'a')
         file.write(f'{args.Mbh:.1e} {args.spin} {args.a} {args.le} {args.wind} {args.T/1e6:.1f} {args.DT} {args.TT} {args.BIMF} {args.RD} {N} {N_emri}\n')
         file.close()
