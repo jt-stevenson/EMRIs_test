@@ -138,7 +138,7 @@ class NovikovThorneAGN:
         mid_transition_flag=0
         outer_flag=0
 
-        k=50
+        k=10
         for i in range(k, steps+1):
             r=self.Radii[i]
             y=np.sqrt(r/self.Rg)
