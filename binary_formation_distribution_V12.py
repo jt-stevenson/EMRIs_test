@@ -467,7 +467,6 @@ def compute_torque(disk, M, Mbh, TT, wind):
         cI_p10 = CI_p10(disk, dSig, dT)
         Gamma_I_p10 = cI_p10*Gamma_0
         return (Gamma_I_p10* exp_decay) + Gamma_GW + Gamma_wind
-
     if TT=="B16": 
         cI_b16 = CI_b16(disk, dSig, dT)
         Gamma_I_b16 = cI_b16*Gamma_0
