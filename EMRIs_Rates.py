@@ -20,7 +20,7 @@ from scipy.interpolate import interp1d
 start = datetime.now()
 warnings.filterwarnings('ignore')
 
-printing=True
+printing=False
 plotting=True
 type_II_computation = "conservative" 
 Fixed=True
@@ -397,23 +397,22 @@ if __name__ == '__main__':
 
     print('initialising cluster...')
     T_clust= 10**6 * ct.yr
-    # try:
-    #     cluster_df=pd.read_csv(f'EMRI_Rates/{args.BIMF}/dataframes/{args.DT}_1e{MBH_power}_alpha_{args.a}_le_{args.le}_spin_{args.spin}_N_*.csv')
-    # except FileNotFoundError:
-    #     print('cluster_df not found, sampling cluster...')
-    #     cluster_df=jscript.cluster_sampling(Mbh, args.a, args.spin, args.le, args.DT, args.BIMF, disk, save=True)
-    if args.RD=='Bartko':
-        gamma=-2.5
-    elif args.RD=='PY':
-        gamma=-1.8
-    elif args.RD=='Rom':
-        gamma=0
-    cluster_df=jscript.cluster_sampling(Mbh, args.a, args.spin, args.le, args.DT, args.BIMF, args.RD, disk, T_clust, gamma=gamma, i=args.iter, save=True)
+    try:
+        cluster_df=pd.read_csv(f'EMRI_Rates/{args.BIMF}/dataframes/{args.DT}_1e{MBH_power}_alpha_{args.a}_le_{args.le}_spin_{args.spin}_N_*.csv')
+    except FileNotFoundError:
+        print('cluster_df not found, sampling cluster...')
+        if args.RD=='Bartko':
+            gamma=-2.5
+        elif args.RD=='PY':
+            gamma=-1.8
+        elif args.RD=='Rom':
+            gamma=0
+        cluster_df=jscript.cluster_sampling(Mbh, args.a, args.spin, args.le, args.DT, args.BIMF, args.RD, disk, T_clust, gamma=gamma, i=args.iter, save=True)
     
     N=len(cluster_df)
     print(f"N: {N}, i: {args.iter}")
 
-    # jscript.plot_torques(args, disk, Mbh, cluster_df['mbh [Msun]'], T_clust)
+    jscript.plot_torques(args, disk, Mbh, cluster_df['mbh [Msun]'], T_clust)
 
     # if args.BIMF=='Vaccaro':
     #     mass_sec=np.genfromtxt("/Users/pmxks13/PhD/EMRIs_test/BHs_single_Zsun_rapid_nospin.dat",usecols=(0),skip_header=3,unpack=True)

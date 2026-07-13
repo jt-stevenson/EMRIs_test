@@ -310,6 +310,7 @@ def mdot_damped(m, disk, gamma, wind):
         #eqn 7 from Chen Ren Dai
         r_obd=(vrel2**(1/2) * r_rel)**2 /(ct.G * m) 
         vk=(ct.G * m /r_obd)**(1/2)
+
         Qco = 2 * alpha * (disk.h/r_obd)**3 * vk**3 /(ct.G * mdot_inflow)
 
         mdot_obd=[]
