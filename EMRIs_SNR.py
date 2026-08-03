@@ -21,6 +21,11 @@ from astropy.cosmology import z_at_value
 import astropy.units as u
 
 
+import binary_formation_distribution_V12 as myscript #edited to explicitly take alpha instead of disc.alpha
+import NT_disk_Eqns_V2 as jscript
+import Novikov
+
+
 td_gen = GenerateEMRIWaveform(
     "FastKerrEccentricEquatorialFlux",
     sum_kwargs=dict(pad_output=True, odd_len=True),
@@ -190,22 +195,16 @@ def compute_snr(
     snr_squared = 4.0 * np.sum((np.abs(h_plus) ** 2 + np.abs(h_cross) ** 2) / cubic_spline_psd(f_pos) * df)
     return float(np.sqrt(snr_squared))
 
+def iteration():
+    return
+
 ################################################################################################
 ### Read parameters from input #################################################################
 ################################################################################################
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-DT', type=str, default="SG", choices=['SG', 'TQM', 'NT'])
-    parser.add_argument('-TT', type=str, default="P10", choices=['P10', 'B16', 'G23'])
-    parser.add_argument('-gen', type=str, default='1g', choices=['1g', 'Ng'])
-    parser.add_argument('-BIMF', type=str, default="PY", choices=['Vaccaro', 'Tagawa', 'Bartos', 'PY'])
-    parser.add_argument('-RD', type=str, default="PY", choices=['Bartko', 'Rom', "PY"])
-    parser.add_argument('-wind', type=str, default="On", choices=['On', 'Off', "Partial"])
-    parser.add_argument('-a', type=float, default=0.1)
-    parser.add_argument('-le', type=float, default=0.01)
-    parser.add_argument('-spin', type=float, default=0.9)  # real number
-    parser.add_argument('-Mbh', type=float, default=1e7)   # MSun
-    parser.add_argument('-T', type=float, default=1e7)     # Myrs
+    parser.add_argument('-infile', type=str, default="input")
+    parser.add_argument('-z', type=float, default=1)     # Redshift
     parser.add_argument('-plot', action='store_true')      # truth value
     parser.add_argument('-date', action='store_true')      # truth value
     parser.add_argument('-iter', type=int)
@@ -220,45 +219,95 @@ def main():
 if __name__ == '__main__':
     args=main()
 
-    N=6311
-    Mbh=args.Mbh
+    z=args.z
 
-    filename=f'EMRI_Rates/{args.BIMF}/MBH_{args.Mbh}/{args.DT}/alpha_{args.a}/spin_{args.spin}/Tdisk_{args.T}/wind_{args.wind}/EMRIs_{args.TT}_1g_*.txt'
+    dir_name = f"/Users/pmxks13/PhD/EMRIs_test/EMRI_Rates/"
+    summary_file = dir_name+f"{args.infile}"
 
-    with open(filename) as f:
+    params = {}
+    with open(summary_file) as f:
         lines = f.readlines()
+        for i in range(0, len(lines)):
+            line=lines[i]
+            if line==lines[0]:
+                line_splitted = line.strip().split()
+                for split in line_splitted:
+                    params[split] = []
+            else:
+                line_splitted = line.strip().split()
+                for k in range(0, len(line_splitted)):
+                    try:
+                        params[list(params)[k]].append(float(line_splitted[k]))
+                    except ValueError:
+                        params[list(params)[k]].append(line_splitted[k])
+        f.close()
+    params=pd.DataFrame.from_dict(params)
+    groups=params.groupby(['TT', 'BIMF', 'RD', 'wind', 'T_disc/Myr'], as_index=True) 
 
-    header_end = lines.index("Data:\n") + 1
 
-    for i in range (4, header_end-2):
-        print(f'{lines[i].split(" = ")[0]}={lines[i].split(" = ")[1]}')
+    for i in range(0, len(params)):
+        wind=params['wind'][i]
+        Tdisk=params['T_disc/Myr'][i]
+        TT=params['TT'][i]
+        Mbh=params['MBH/Msun'][i]
+        BIMF=params['BIMF'][i]
+        RD=params['RD'][i]
+        DT=params['DT'][i]
+        a=params['alpha'][i]
+        le=params['le'][i]
+        N_emri=params['N_EMRI'][i]
+        N=params['N'][i]
+        spin=params['spin'][i]
 
-    data = pd.read_csv(filename, delimiter=" ", skiprows=header_end)
+        filename=f'EMRI_Rates/{BIMF}/{RD}/MBH_{Mbh}/{DT}/alpha_{a}/spin_{spin}/Tdisk_{Tdisk}/wind_{wind}/EMRIs_{TT}_1g.txt'
 
-    data.columns = [col.strip().replace(",", "") for col in data.columns]
-    print(data.keys())
+        with open(filename) as f:
+            lines = f.readlines()
+            header_end = lines.index("Data:\n") + 1
 
-    N=len(data["m1/Msun"])
-    print(f'Columns: {header_end}, Rows: {N}')
+            for i in range (4, header_end-2):
+                print(f'{lines[i].split(" = ")[0]}={lines[i].split(" = ")[1]}')
+            f.close
+        data = pd.read_csv(filename, delimiter=" ", skiprows=header_end)
 
-    m1=data['m1/Msun']
-    print(m1[0])
+        data.columns = [col.strip().replace(",", "") for col in data.columns]
+        print(data.keys())
 
+        N=len(data["m1/Msun"])
+        print(f'Columns: {header_end}, Rows: {N}')
 
-    Tobs = 4  # observation time (years), if the inspiral is shorter, the it will be zero padded
-    dt = 5    # time interval (seconds)
-    mode_selection_threshold = 1e-4  # relative threshold for mode inclusion: only modes making a relative contribution to
-                # the total power above this threshold will be included in the waveform.
-    x0 = 1.0 #initial cos(inclination) - fine to assume as 1 due to short timescale of alignment compared to inspiral
-    e0 = 0  # eccentricity - assumed circular in runs anyway
-    a = args.spin   # dimensionless spin parameter for the primary - will be ignored in Schwarzschild waveform
-    ef = 0.0
+        N_emri=len(params)
 
-    SNRs_Speri=[]
-    SNR_counts=[]
+        m1=data['m1/Msun']
 
-    for i in range(0, N):
-        m2 = data['m1/Msun'][i] # secondary object mass (solar masses)
-        snr_speri=compute_snr(m1, m2 , a, Tobs, ef, z, dt, psd='LISA_FEW')
+        Tobs = 4  # observation time (years), if the inspiral is shorter, the it will be zero padded
+        dt = 5    # time interval (seconds)
+        mode_selection_threshold = 1e-4  # relative threshold for mode inclusion: only modes making a relative contribution to
+                    # the total power above this threshold will be included in the waveform.
+        x0 = 1.0 #initial cos(inclination) - fine to assume as 1 due to short timescale of alignment compared to inspiral
+        e0 = 0  # eccentricity - assumed circular in runs anyway
+        a = args.spin   # dimensionless spin parameter for the primary - will be ignored in Schwarzschild waveform
+        ef = 0.0
 
-        SNRs_Speri.append(snr_speri)
+        SNRs_Speri=[]
+        SNR_counts=[]
+        SNRs_above_20=0
+        SNRs_above_30=0
+
+        for i in range(0, N):
+            m2 = data['m1/Msun'][i] # secondary object mass (solar masses)
+            snr_speri=compute_snr(m1, m2 , a, Tobs, ef, z, dt, psd='LISA_FEW')
+            SNRs_Speri.append(snr_speri)
+            if snr_speri>=20:
+                SNRs_above_20+=1
+                if snr_speri>=30:
+                    SNRs_above_30+=1
+        
+        print('appending to summary file...')
+        print(f'MBH: {args.Mbh:.1e} MSun\nSpin: {args.spin}\nalpha: {args.a}\nle: {args.le}\nwind: {args.wind}\nTdisk: {args.T/1e6:.1f} Myrs\nDT: {args.DT}\nTT: {args.TT}\nBIMF: {args.BIMF}\nRD: {args.RD}\nN: {N}, N_emri: {N_emri}\n')
+
+        SNR_file = dir_name+f"EMRI_Rates_Summary_with_SNRs.txt"
+        file = open(SNR_file, 'a')
+        file.write(f'{args.Mbh:.1e} {args.spin} {args.a} {args.le} {args.wind} {args.T/1e6:.1f} {args.DT} {args.TT} {args.BIMF} {args.RD} {N} {N_emri}\n')
+        file.close()
+        print(f'file {SNR_file} closed, beginning next permutation.')

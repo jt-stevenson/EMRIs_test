@@ -1,0 +1,445 @@
+# AGNRates
+
+`AGNRates` is a collection of Python scripts for converting a grid of
+single-AGN binary black hole (BBH) simulations into:
+
+1. delay-time and chirp-mass yields for each simulated AGN;
+2. proto merger-rate-density (proto-MRD) kernels at fixed AGN formation
+   redshift;
+3. a cosmological source-frame merger-rate density \(R(z)\);
+4. intrinsic, cosmologically weighted BBH catalogs in merger-redshift bins; and
+5. finite observer-frame mock catalogs, optionally including a
+   redshift-dependent detection efficiency.
+
+The scripts use the `Planck18` cosmology from Astropy.
+
+## Repository contents
+
+| Script | Purpose |
+| --- | --- |
+| `run_yields.py` | Computes delay-time yields and two-dimensional delay-time–chirp-mass histograms for one simulation run. |
+| `wrapper_run_yields.py` | Runs `run_yields.py` over a hard-coded AGN simulation grid. |
+| `build_proto_MRD.py` | Combines the per-run yields with \(p(M_\mathrm{SMBH}\mid z_\mathrm{form})\), \(p(f_\mathrm{Edd}\mid M_\mathrm{SMBH},z_\mathrm{form})\), and \(N_\mathrm{BH}\) to build one proto-MRD kernel. |
+| `wrapper_build_proto_MRD.py` | Calls `build_proto_MRD.py` over a grid of formation redshifts. |
+| `MRD_computation.py` | Integrates the proto-MRD kernels over AGN formation redshift and AGN abundance to obtain \(R(z)\). |
+| `build_intrinsic_zmerg_catalogs.py` | Builds weighted intrinsic BBH-property catalogs in merger-redshift bins directly from the simulation grid. |
+| `build_mock_catalog.py` | Draws a finite observer-frame catalog from an intrinsic population and \(R(z)\). |
+
+The rate and catalog calculations form two related branches:
+
+```text
+single-AGN simulation catalogs
+├── run_yields.py
+│   └── build_proto_MRD.py / wrapper_build_proto_MRD.py
+│       └── MRD_computation.py ───────────────┐
+└── build_intrinsic_zmerg_catalogs.py ────────┼── build_mock_catalog.py
+                                              └── finite observer catalog
+```
+
+## Requirements
+
+The scripts require Python 3.10 or newer and the following packages:
+
+- NumPy
+- pandas
+- SciPy
+- Astropy
+
+
+## Expected simulation layout
+
+Most scripts assume that the single-AGN simulations are stored as:
+
+```text
+RUNS_ROOT/
+└── SG/
+    └── alpha_0.01/
+        └── logM_7.0/
+            └── fEdd_0.1/
+                └── G24_K18-3bb_0.0-IG25-agnostic-tau_x_1./
+                    └── outputs/
+                        ├── first_gen.txt
+                        └── nth_generation.txt
+```
+
+Here:
+
+- `logM_*` is \(\log_{10}(M_\mathrm{SMBH}/M_\odot)\);
+- `fEdd_*` is the Eddington ratio;
+- `alpha_*` is the disk-viscosity parameter;
+- the long directory name identifies the torque, three-body, gas-hardening,
+  orbital-orientation, and AGN-lifetime prescriptions.
+
+`build_proto_MRD.py` expects `--runs-base` to point to the directory directly
+containing `alpha_*`. With the layout above, that would be
+`RUNS_ROOT/SG`.
+
+`build_intrinsic_zmerg_catalogs.py`, instead, expects `--runs-root` to point to
+the directory containing the disk directories, i.e. `RUNS_ROOT`.
+
+## Input files
+
+### Simulation event catalogs
+
+`run_yields.py` reads `first_gen.txt` and/or `nth_generation.txt`. These files
+must be whitespace-separated and contain at least:
+
+| Column | Meaning |
+| --- | --- |
+| `c13:tmerg/Myr` | Delay time from the start of the AGN episode to merger, in Myr. |
+| `c20:flag3` | Merger flag; only rows equal to `in_cluster` are treated as mergers. |
+| `c1:M1/Msun` | Primary mass in \(M_\odot\). |
+| `c2:M2/Msun` | Secondary mass in \(M_\odot\). |
+| `c33:N_BH` | Number of BHs in the AGN; optional for `run_yields.py`, but used by the proto-MRD calculation when available. |
+
+The intrinsic-catalog script also expects `c13:tmerg/Myr` by default. The
+column name and unit can be changed with `--t-delay-col` and
+`--t-delay-unit`.
+
+### SMBH mass distribution
+
+The `p(M|z)` input is an `.npz` file containing:
+
+```text
+z_grid       shape (Nz,)
+M_grid       shape (NM,)       # log10(M_SMBH/Msun)
+pM_given_z   shape (Nz, NM)
+```
+
+### Eddington-ratio distribution
+
+The `p(fEdd|M,z)` input is an `.npz` file containing:
+
+```text
+z_grid            shape (Nz,)
+M_grid            shape (NM,)       # log10(M_SMBH/Msun)
+fedd_grid         shape (Nf,)
+pfedd_given_Mz    shape (Nz, NM, Nf)
+```
+
+By default, `fedd_grid` is interpreted as \(f_\mathrm{Edd}\), not
+\(\log_{10}f_\mathrm{Edd}\). For the intrinsic-catalog calculation, use
+`--pfedd-uses-logfedd true` if the stored axis is logarithmic.
+
+### AGN abundance
+
+The AGN-abundance file is a two-column text table containing redshift and
+\(n_\mathrm{AGN}(z)\). The intrinsic-catalog code interprets the abundance as
+comoving \(\mathrm{Mpc}^{-3}\).
+
+The default filenames encode the SMBH/Eddington-ratio model (`EL` or `SE`) and
+the AGN-abundance normalization (low-abundance model, `LAM` or high-abundance model, `HAM`), for example:
+
+```text
+nAGN_EL_LAM.txt
+nAGN_EL_HAM.txt
+nAGN_SE_HAM.txt
+```
+
+## Rate-density workflow
+
+Run commands from the `AGNRates` directory unless stated otherwise. The paths
+below are examples and should be replaced with the locations of the simulation
+grid and cosmological inputs.
+
+### 1. Compute the yield of one AGN run
+
+```bash
+python run_yields.py \
+  --run-dir /path/to/RUNS/SG/alpha_0.01/logM_7.0/fEdd_0.1/MODEL_LABEL/outputs
+```
+
+For each available generation catalog, this writes:
+
+```text
+yield_1g.txt
+yield_ng.txt
+hist2d_tdelay_mchirp_1g.npz
+hist2d_tdelay_mchirp_ng.npz
+summary_yields.txt
+```
+
+The yield histograms are normalized by the total number of sampled rows in the
+corresponding event file. The default grids are defined near the top of
+`run_yields.py`:
+
+```python
+T_BINS = np.logspace(-6, 4, 80)       # Gyr
+MCHIRP_BINS = np.logspace(1, 4, 80)   # Msun
+```
+
+Edit these values before processing the grid if different binning is required.
+
+To process the complete grid, adapt `wrapper_run_yields.py`. This wrapper
+currently contains cluster-specific absolute paths and a hard-coded model
+configuration; it is not portable without editing.
+
+### 2. Build proto-MRD kernels
+
+For a single formation redshift:
+
+```bash
+python build_proto_MRD.py \
+  --runs-base /path/to/RUNS/SG \
+  --alpha 0.01 \
+  --label G24_K18-3bb_0.0-IG25-agnostic-tau_x_1. \
+  --pm-file /path/to/pM_given_z_EL.npz \
+  --pfedd-file /path/to/pfEdd_given_Mz_EL.npz \
+  --redshift-model EL \
+  --zform 2.0 \
+  --outdir /path/to/outputs/protoMRD
+```
+
+To process a range of formation redshifts:
+
+```bash
+python wrapper_build_proto_MRD.py \
+  --runs-base /path/to/RUNS/SG \
+  --alpha 0.01 \
+  --label G24_K18-3bb_0.0-IG25-agnostic-tau_x_1. \
+  --pm-file /path/to/pM_given_z_EL.npz \
+  --pfedd-file /path/to/pfEdd_given_Mz_EL.npz \
+  --redshift-model EL \
+  --zform-min 0.0 \
+  --zform-max 15.0 \
+  --zform-step 0.01 \
+  --outdir /path/to/outputs/protoMRD
+```
+
+Outputs are organized as:
+
+```text
+protoMRD/
+└── alpha_0.01/
+    └── MODEL_LABEL/
+        └── EL/
+            └── Z_FORM/
+                ├── kernel_vs_z.txt
+                ├── contributions_by_run.txt
+                ├── mchirp_distribution_vs_z.npz
+                ├── mchirp_percentiles_vs_z.txt
+                ├── mchirp_contributions_by_run.txt
+                └── meta.txt
+```
+
+The chirp-mass products are written only when the corresponding two-dimensional
+yield histograms are available.
+
+### 3. Integrate over the AGN population
+
+```bash
+python MRD_computation.py \
+  --proto-dir /path/to/outputs/protoMRD \
+  --redshift-model EL \
+  --AGN-abundance-model LAM \
+  --alpha 0.01 \
+  --label G24_K18-3bb_0.0-IG25-agnostic-tau_x_1. \
+  --nagn-file /path/to/nAGN_EL_LAM.txt \
+  --outdir /path/to/outputs/MRD_results
+```
+
+The principal result is:
+
+```text
+MRD_results/
+└── alpha_0.01/
+    └── MODEL_LABEL/
+        └── EL_LAM/
+            ├── MRD_vs_z.txt
+            ├── zform_contributions.txt
+            ├── mchirp_distribution_vs_z.npz
+            ├── mchirp_percentiles_vs_z.txt
+            ├── zform_mchirp_contributions.txt
+            └── meta.txt
+```
+
+`MRD_vs_z.txt` contains:
+
+| Column | Meaning |
+| --- | --- |
+| `z` | Merger redshift. |
+| `R_of_z` | Source-frame merger-rate density \(R(z)\), intended to be used in \(\mathrm{Gpc}^{-3}\,\mathrm{yr}^{-1}\). |
+
+The script prints three integrated-rate consistency checks. Large relative
+mismatches indicate inconsistent grids, units, or missing proto-MRD files.
+Use `--allow-missing` only when intentionally working with an incomplete grid.
+
+## Intrinsic catalog workflow
+
+`build_intrinsic_zmerg_catalogs.py` directly combines event properties from the
+single-AGN catalogs with the cosmological environment weights. It produces
+weighted event copies representing
+
+\[
+p(\theta \mid z_\mathrm{merg}\ \mathrm{in\ a\ specified\ bin}),
+\]
+
+where \(\theta\) denotes the BBH and AGN properties.
+
+Example:
+
+```bash
+python build_intrinsic_zmerg_catalogs.py \
+  --runs-root /path/to/RUNS \
+  --pM-file /path/to/pM_given_z_EL.npz \
+  --pfedd-file /path/to/pfEdd_given_Mz_EL.npz \
+  --nagn-file /path/to/nAGN_EL_LAM.txt \
+  --redshift-model EL \
+  --agn-abundance LAM \
+  --alpha 0.01 \
+  --run-label G24_K18-3bb_0.0-IG25-agnostic-tau_x_1. \
+  --output-root /path/to/outputs/catalogs_by_zmerg
+```
+
+The default merger-redshift bins cover \(0\leq z<10\). Custom bins can be
+passed as:
+
+```bash
+--z-bins '0,0.5;0.5,1;1,2;2,4'
+```
+
+The output path records the chosen cosmological model, abundance model, and
+viscosity:
+
+```text
+catalogs_by_zmerg/
+└── redshift_model_EL/
+    └── agn_abundance_LAM/
+        └── alpha_0.01/
+            ├── z_0.0_0.5/
+            │   └── BBH_mergers_MODEL_LABEL.txt
+            ├── z_0.5_1.0/
+            │   └── BBH_mergers_MODEL_LABEL.txt
+            └── ...
+```
+
+Each non-empty catalog preserves the original event columns and adds, among
+other metadata:
+
+- `run_dir`;
+- `gen_flag`;
+- `logM_SMBH`, `f_Edd`, and `alpha`;
+- `z_form` and `z_merg`;
+- `t_delay_Gyr`;
+- `weight_raw`;
+- `weight_norm`, normalized independently within that merger-redshift bin.
+
+If the directory hierarchy cannot be inferred automatically, supply a CSV or
+whitespace-separated run manifest with at least:
+
+```text
+run_dir, logM, logfedd, alpha
+```
+
+An optional `run_weight` column overrides the default per-run weight. By
+default, the code uses \(1/N_\mathrm{sample}\), with
+`DEFAULT_N_SAMPLE = 1e4`. Set `INCLUDE_N_BH_FACTOR = True` near the top of the
+script to use \(N_\mathrm{BH}/N_\mathrm{sample}\).
+
+## Mock observer catalogs
+
+`build_mock_catalog.py` converts the source-frame rate density into an expected
+observer-frame count:
+
+\[
+\frac{dN_\mathrm{obs}}{dz}
+= T_\mathrm{obs}
+  \frac{R(z)}{1+z}
+  \frac{dV_c}{dz}
+  \epsilon(z)
+  f_\mathrm{sky}.
+\]
+
+It draws the catalog size from a Poisson distribution and samples event
+properties from the intrinsic population in redshift bins.
+
+The input population must be a single table. If the intrinsic catalogs were
+written separately by redshift, concatenate the non-empty tables first:
+
+```python
+from pathlib import Path
+import pandas as pd
+
+files = sorted(Path("/path/to/catalogs/alpha_0.01").glob("z_*/*.txt"))
+catalogs = [pd.read_csv(path, sep=r"\s+") for path in files]
+pd.concat(catalogs, ignore_index=True).to_csv(
+    "/path/to/intrinsic_EL_LAM_alpha001.txt",
+    sep="\t",
+    index=False,
+)
+```
+
+Then run:
+
+```bash
+python build_mock_catalog.py \
+  --catalog /path/to/intrinsic_EL_LAM_alpha001.txt \
+  --mrd /path/to/MRD_vs_z.txt \
+  --mrd-rate-column R_of_z \
+  --weight-column weight_norm \
+  --duration-yr 10 \
+  --sky-fraction 1 \
+  --z-min 0 \
+  --z-max 10 \
+  --seed 42 \
+  --label ET_10yr_allsky \
+  --prefix mock_catalog_ET_10yr \
+  --outdir /path/to/outputs/mock_catalog
+```
+
+**Important:** `MRD_computation.py` writes the rate column as `R_of_z`, whereas
+`build_mock_catalog.py` defaults to `Rz`. Therefore, include
+`--mrd-rate-column R_of_z` when passing `MRD_vs_z.txt`.
+
+To apply a detection efficiency, pass:
+
+```bash
+--epsilon-file /path/to/epsilon_ET.txt \
+--epsilon-z-column z \
+--epsilon-column epsilon_z
+```
+
+The efficiency is clipped to \([0,1]\) and interpolated onto the MRD redshift
+grid. Outside the tabulated range it is set to zero. If no efficiency file is
+given, the script assumes \(\epsilon(z)=1\).
+
+The mock-catalog outputs are:
+
+```text
+PREFIX.csv
+PREFIX_rate_curve.csv
+PREFIX_info.json
+```
+
+The JSON file records the expected Poisson mean and realized catalog size.
+
+## Cluster-specific settings and portability
+
+Before running the full pipeline on a new system, check the following:
+
+1. `RUNS_ROOTS` in `build_intrinsic_zmerg_catalogs.py` currently contains a
+   Heidelberg cluster path. Passing `--runs-root` avoids using this default.
+2. `wrapper_run_yields.py` contains a separate hard-coded cluster path and
+   fixed grid/model choices. Edit the wrapper before using it.
+3. `GRID_*`, `RUN_LABEL_DEFAULT`, column names, histogram bins, and redshift
+   bins are defined near the top of the relevant scripts.
+4. Relative default input/output paths are resolved from the current working
+   directory, not from the location of the script. Explicit absolute paths are
+   safer for production runs.
+5. The two wrappers do not submit scheduler jobs; they run the calculations
+   sequentially in the current process.
+
+## Reproducibility notes
+
+- `build_mock_catalog.py` is stochastic; use `--seed` to reproduce a draw.
+- The intrinsic-catalog quadrature is deterministic. Increase
+  `--nz-form-per-event` from its default of `1` to resolve the allowed
+  formation-time interval more finely.
+- `Planck18` is used consistently for cosmic ages, volumes, and
+  time–redshift conversion.
+- Empty or missing generations are skipped by `run_yields.py`; missing
+  proto-MRD files are fatal unless `--allow-missing` is supplied.
+- The same simulated BBH can appear in multiple merger-redshift bins with
+  different formation redshifts and weights. These are weighted event copies,
+  not independent simulated binaries.
+

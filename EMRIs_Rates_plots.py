@@ -109,24 +109,24 @@ for group in groups:
             wind=group[1]['wind'][i]
             Tdisk=group[1]['T_disc/Myr'][i]
             TT=group[1]['TT'][i]
-            if Tdisk==10.0 and wind=='On':
+            Mbh=group[1]['MBH/Msun'][i]
+            if Tdisk==10.0 and wind=='On' and TT=="G23":
                 BIMF=group[1]['BIMF'][i]
                 RD=group[1]['RD'][i]
                 DT=group[1]['DT'][i]
                 alpha=group[1]['alpha'][i]
                 le=group[1]['le'][i]
-                Mbh=group[1]['MBH/Msun'][i]
                 N_emri=group[1]['N_EMRI'][i]
                 Tdisk=group[1]['T_disc/Myr'][i] * 1e6
                 G_emri=N_emri*(1e9/Tdisk)
                 print(f'\nTT: {TT}, BIMF: {BIMF}, RD: {RD}, wind: {wind}')
                 print(f'Tdisk {Tdisk/1e6:.1f} Myr, {G_emri:.1e} NEmri/Gyr')
                 if TT=='P10':
-                    color='deeppink'
+                    color='firebrick'
                 elif TT=='B16':
-                    color='indigo'
+                    color='darkorange'
                 elif TT=='G23':
-                    color='royalblue'
+                    color='gold'
 
                 if BIMF=='PY':
                     marker='o'
@@ -160,15 +160,18 @@ for group in groups:
                 
                 antitraps = myscript.anti_trap(disk, mean_Gamma) 
                 innermost_antitrap = antitraps[0] if len(antitraps) > 0 else Rmax
-    
-                plt.plot(innermost_antitrap/jscript.pc, G_emri, marker=marker, color=color, markersize=8,  fillstyle=fillstyle, alpha=0.5, markeredgewidth=1.5)
+
+                print(f'\n**Mbh: {Mbh:1e} MSun**')
+                print(f'**Rmax: {Rmax/jscript.pc:1e} pc**')
+                print(f'**innermost antitrap: {innermost_antitrap/jscript.pc:1e} pc**\n')
+                
+                plt.plot(Mbh, G_emri, marker=marker, color=color, markersize=8,  fillstyle=fillstyle, alpha=0.5, markeredgewidth=1.5)
         except KeyError:
             pass
 
-
-legend_elements = [Line2D([0], [0], marker='o', color='deeppink', label='P10',linestyle='None'),
-                   Line2D([0], [0], marker='o', color='indigo', label='B16',linestyle='None'),
-                   Line2D([0], [0], marker='o', color='royalblue', label='G23',linestyle='None'),
+legend_elements = [Line2D([0], [0], marker='o', color='firebrick', label='P10',linestyle='None'),
+                   Line2D([0], [0], marker='o', color='darkorange', label='B16',linestyle='None'),
+                   Line2D([0], [0], marker='o', color='gold', label='G23',linestyle='None'),
                    Line2D([0], [0], marker='o', color='k', label='PY',linestyle='None'),
                    Line2D([0], [0], marker='p', color='k', label='Bartos',linestyle='None'),
                    Line2D([0], [0], marker='*', color='k', label='Tagawa',linestyle='None'),
@@ -177,15 +180,21 @@ legend_elements = [Line2D([0], [0], marker='o', color='deeppink', label='P10',li
                    Line2D([0], [0], marker='o', color='k', label='Bartko',linestyle='None', fillstyle='none'),
                    Line2D([0], [0], marker='o', color='k', label='Rom',linestyle='None', fillstyle='right')]
 
+
+Mbh_PY=[1e5, 4e5, 1e6, 4e6, 1e7]
+Rates_PY=[4.2e3, 1.7e5, 4.5e5, 2.4e5, 1.3e5]
+
+plt.plot(Mbh_PY, Rates_PY, marker='.', color='black', markersize=10, linestyle='None')
+
 plt.xscale('log')
 plt.yscale('log')
 
-plt.xlim(3e-5, 10)
+# plt.xlim(3e-5, 10)
 plt.ylim(10, 1e7)
 
 plt.ylabel('$N_{EMRI}/Gyr$')
-plt.xlabel('Innermost Trap [pc]')
+plt.xlabel('$Mbh [M_{\odot}]$')
 
-plt.legend(handles=legend_elements, loc='lower right')
+# plt.legend(handles=legend_elements, loc='upper left')
 
-plt.savefig(f'/Users/pmxks13/PhD/EMRIs_test/EMRI_Rates/rates_vs_innertrap_pc.png', dpi=300)
+plt.savefig(f'/Users/pmxks13/PhD/EMRIs_test/EMRI_Rates/rates_g23.png', dpi=300)

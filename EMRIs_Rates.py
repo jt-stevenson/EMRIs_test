@@ -20,7 +20,7 @@ from scipy.interpolate import interp1d
 start = datetime.now()
 warnings.filterwarnings('ignore')
 
-printing=False
+printing=True
 plotting=True
 type_II_computation = "conservative" 
 Fixed=True
@@ -335,7 +335,8 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
 
     #assume zero eccentricity
     # print('FINISHED, WRITING TO FILE')
-    return f"{m1/ct.MSun:.3e} {r0/rG:.3e} {cos_i:.3f} {t_align/(1e6*ct.yr):.3e} {t_gw/(1e6*ct.yr):.3e} {t_migr/(1e6*ct.yr):.3e} {t_inspiral/(1e6*ct.yr):.3e} {Ng} {r_final/rG:.3e} {lisa_radii/rG:.3e} {t_lisa/(1e6*ct.yr):.3e} {t_final/(1e6*ct.yr):.3e} {lisa_flag} {flags}\n"
+    if flags==7 and t_inspiral<=t_final:
+        return f"{m1/ct.MSun:.3e} {r0/rG:.3e} {cos_i:.3f} {t_align/(1e6*ct.yr):.3e} {t_gw/(1e6*ct.yr):.3e} {t_migr/(1e6*ct.yr):.3e} {t_inspiral/(1e6*ct.yr):.3e} {Ng} {r_final/rG:.3e} {lisa_radii/rG:.3e} {t_lisa/(1e6*ct.yr):.3e} {t_final/(1e6*ct.yr):.3e} {lisa_flag} {flags}\n"
 ################################################################################################
 ### Read parameters from input #################################################################
 ################################################################################################
@@ -433,12 +434,12 @@ if __name__ == '__main__':
         print('printing to file...')
 
         dir_name = f"/Users/pmxks13/PhD/EMRIs_test/EMRI_Rates/"
-        subdir_name=dir_name+f'{args.BIMF}/Mbh_{args.Mbh:.1e}/{args.DT}/alpha_{args.a}/spin_{args.spin}/Tdisk_{args.T/(1e6)}/wind_{args.wind}/'
+        subdir_name=dir_name+f'{args.BIMF}/{args.RD}/Mbh_{args.Mbh:.1e}/{args.DT}/alpha_{args.a}/spin_{args.spin}/Tdisk_{args.T/(1e6)}/wind_{args.wind}/'
         if not os.path.exists(subdir_name):
             os.makedirs(subdir_name)
-        file_name = subdir_name+f"EMRIs_{args.TT}_{args.gen}_{N}.txt"
+        file_name = subdir_name+f"EMRIs_{args.TT}_{args.gen}_5.txt"
         print(f'file name: {file_name}')
-        file_name_1g = dir_name+f"EMRIs_{args.TT}_1g_{N}_3.txt"
+        file_name_1g = dir_name+f"EMRIs_{args.TT}_1g.txt"
         if args.gen=='Ng' and  not os.path.exists(file_name_1g):
             print()
             print('There is no 1g source for this Ng simulation. Run the same simulation for 1g first!')
@@ -533,7 +534,7 @@ if __name__ == '__main__':
         print('printing following to summary file...')
         print(f'MBH: {args.Mbh:.1e} MSun\nSpin: {args.spin}\nalpha: {args.a}\nle: {args.le}\nwind: {args.wind}\nTdisk: {args.T/1e6:.1f} Myrs\nDT: {args.DT}\nTT: {args.TT}\nBIMF: {args.BIMF}\nRD: {args.RD}\nN: {N}, N_emri: {N_emri}\n')
 
-        summary_file = dir_name+f"EMRI_Rates_Summary_3.txt"
+        summary_file = dir_name+f"EMRI_Rates_Summary_5.txt"
         file = open(summary_file, 'a')
         file.write(f'{args.Mbh:.1e} {args.spin} {args.a} {args.le} {args.wind} {args.T/1e6:.1f} {args.DT} {args.TT} {args.BIMF} {args.RD} {N} {N_emri}\n')
         file.close()
