@@ -434,7 +434,7 @@ if __name__ == '__main__':
         print('printing to file...')
 
         dir_name = f"/Users/pmxks13/PhD/EMRIs_test/EMRI_Rates/"
-        subdir_name=dir_name+f'{args.BIMF}/{args.RD}/Mbh_{args.Mbh:.1e}/{args.DT}/alpha_{args.a}/spin_{args.spin}/Tdisk_{args.T/(1e6)}/wind_{args.wind}/'
+        subdir_name=dir_name+f'{args.BIMF}/{args.RD}/le_{args.le}/Mbh_{args.Mbh:.1e}/{args.DT}/alpha_{args.a}/spin_{args.spin}/Tdisk_{args.T/(1e6)}/wind_{args.wind}/'
         if not os.path.exists(subdir_name):
             os.makedirs(subdir_name)
         file_name = subdir_name+f"EMRIs_{args.TT}_{args.gen}_5.txt"
@@ -460,6 +460,7 @@ if __name__ == '__main__':
         file.write(f"N = {N}\n")
         file.write(f'M_SMBH = {args.Mbh}\n')
         file.write(f'Spin = {args.spin}\n')
+        file.write(f'le = {args.le}\n')
         file.write(f'T = {args.T/(1e6)}\n')
         file.write(f"\n")
         file.write(f"Data:\n")

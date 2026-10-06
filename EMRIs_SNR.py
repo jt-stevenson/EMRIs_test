@@ -1,8 +1,6 @@
 import pandas as pd
 import numpy as np
-import lal
-import numpy.random as rng
-import matplotlib.pyplot as plt
+import pagn.constants as ct
 
 import warnings
 import argparse
@@ -56,7 +54,6 @@ FEW_GEN = GenerateEMRIWaveform(
     sum_kwargs=dict(pad_output=True, output_type="fd", odd_len=True),
     return_list=True,
 )
-
 
 #from lsperi notebooks
 def redshift_to_luminosity_distance(z):
@@ -241,9 +238,8 @@ if __name__ == '__main__':
                     except ValueError:
                         params[list(params)[k]].append(line_splitted[k])
         f.close()
-    params=pd.DataFrame.from_dict(params)
-    groups=params.groupby(['TT', 'BIMF', 'RD', 'wind', 'T_disc/Myr'], as_index=True) 
 
+    params=pd.DataFrame.from_dict(params)
 
     for i in range(0, len(params)):
         wind=params['wind'][i]
@@ -256,10 +252,10 @@ if __name__ == '__main__':
         a=params['alpha'][i]
         le=params['le'][i]
         N_emri=params['N_EMRI'][i]
-        N=params['N'][i]
+        N=params['N_tot'][i]
         spin=params['spin'][i]
 
-        filename=f'EMRI_Rates/{BIMF}/{RD}/MBH_{Mbh}/{DT}/alpha_{a}/spin_{spin}/Tdisk_{Tdisk}/wind_{wind}/EMRIs_{TT}_1g.txt'
+        filename=f'EMRI_Rates/{BIMF}/{RD}/le_{le}/MBH_{Mbh:.1e}/{DT}/alpha_{a}/spin_{spin}/Tdisk_{Tdisk}/wind_{wind}/EMRIs_{TT}_1g_5.txt'
 
         with open(filename) as f:
             lines = f.readlines()
@@ -271,14 +267,8 @@ if __name__ == '__main__':
         data = pd.read_csv(filename, delimiter=" ", skiprows=header_end)
 
         data.columns = [col.strip().replace(",", "") for col in data.columns]
-        print(data.keys())
 
-        N=len(data["m1/Msun"])
-        print(f'Columns: {header_end}, Rows: {N}')
-
-        N_emri=len(params)
-
-        m1=data['m1/Msun']
+        m2=data['m1/Msun']
 
         Tobs = 4  # observation time (years), if the inspiral is shorter, the it will be zero padded
         dt = 5    # time interval (seconds)
@@ -286,28 +276,25 @@ if __name__ == '__main__':
                     # the total power above this threshold will be included in the waveform.
         x0 = 1.0 #initial cos(inclination) - fine to assume as 1 due to short timescale of alignment compared to inspiral
         e0 = 0  # eccentricity - assumed circular in runs anyway
-        a = args.spin   # dimensionless spin parameter for the primary - will be ignored in Schwarzschild waveform
         ef = 0.0
 
         SNRs_Speri=[]
-        SNR_counts=[]
         SNRs_above_20=0
         SNRs_above_30=0
 
-        for i in range(0, N):
-            m2 = data['m1/Msun'][i] # secondary object mass (solar masses)
-            snr_speri=compute_snr(m1, m2 , a, Tobs, ef, z, dt, psd='LISA_FEW')
+        for i in range(0, len(m2)):
+            snr_speri=compute_snr(Mbh, m2[i], spin, Tobs, ef, z, dt, psd='LISA_FEW')
             SNRs_Speri.append(snr_speri)
             if snr_speri>=20:
                 SNRs_above_20+=1
                 if snr_speri>=30:
                     SNRs_above_30+=1
-        
+        print(f'SNRs: {SNRs_Speri}')
         print('appending to summary file...')
-        print(f'MBH: {args.Mbh:.1e} MSun\nSpin: {args.spin}\nalpha: {args.a}\nle: {args.le}\nwind: {args.wind}\nTdisk: {args.T/1e6:.1f} Myrs\nDT: {args.DT}\nTT: {args.TT}\nBIMF: {args.BIMF}\nRD: {args.RD}\nN: {N}, N_emri: {N_emri}\n')
+        print(f'MBH: {Mbh:.1e} MSun\nSpin: {spin}\nalpha: {a}\nle: {le}\nwind: {wind}\nTdisk: {Tdisk:.1f} Myrs\nDT: {DT}\nTT: {TT}\nBIMF: {BIMF}\nRD: {RD}\nN: {N}, N_emri: {N_emri}\nSNRs>20: {SNRs_above_20}\nSNRs>30: {SNRs_above_30}\nz: {z}')
 
         SNR_file = dir_name+f"EMRI_Rates_Summary_with_SNRs.txt"
         file = open(SNR_file, 'a')
-        file.write(f'{args.Mbh:.1e} {args.spin} {args.a} {args.le} {args.wind} {args.T/1e6:.1f} {args.DT} {args.TT} {args.BIMF} {args.RD} {N} {N_emri}\n')
+        file.write(f'{Mbh:.1e} {spin} {a} {le} {wind} {Tdisk:.1f} {DT} {TT} {BIMF} {RD} {N} {N_emri} {SNRs_above_20} {SNRs_above_30} {z}\n')
         file.close()
         print(f'file {SNR_file} closed, beginning next permutation.')

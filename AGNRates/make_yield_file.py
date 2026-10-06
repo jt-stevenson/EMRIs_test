@@ -2,17 +2,14 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import argparse
 
 from datetime import datetime, timedelta
 
-INPUT_FILE = Path("Example_Rates.txt")
-OUTPUT_FILE = Path("Example_Output.txt")
-LABEL = "EMRI" ##read manually from the input file, but we make it automatic especially if it's different in every run
-N_BH = 100 ##here totally arbitrary
 MERGER_FLAG = 7
 DELAY_COLUMN = "t_inspiral/Myr"
 FLAG_COLUMN = "total_flags"
-BIN_EDGES_GYR = np.logspace(-6, -1, 80)
+BIN_EDGES_GYR = np.logspace(-9, -1, 80)
 
 def parse(value):
     try:
@@ -37,9 +34,8 @@ def parse(value):
             except ValueError:
                 return value
 
-def make_yield_file(
-    input_file: Path = INPUT_FILE,
-    output_file: Path = OUTPUT_FILE,
+def make_yield_file(LABEL, 
+    input_file,
 ):
     """Create the two-column LISA delay-time yield file."""
     params={}
@@ -60,7 +56,10 @@ def make_yield_file(
             
         events = pd.read_csv(file, sep=r"\s+", engine="python")
 
+    print(f'events: {events}')
+
     N_SAMPLE=params['N']
+    N_BH=params['N']
 
     columns = {column.rstrip(","): column for column in events.columns}
 
@@ -94,8 +93,14 @@ def make_yield_file(
 
     if np.any(~np.isfinite(yields)) or np.any(yields < 0.0):
         raise ValueError("Generated yields must be finite and non-negative")
+    
+    M=params['M_SMBH']
+    alpha=params['alpha']
+
+    output_file=Path(f'/Users/pmxks13/PhD/EMRIs_test/AGNRates/yields_files/Z0.02/SG_alpha_{alpha}/{LABEL}/M_{M:.1e}_fEdd_0.01/yield_1g.txt')
 
     output_file.parent.mkdir(parents=True, exist_ok=True)
+
     pd.DataFrame(
         {
             "t_delay_Gyr": centers,
@@ -119,6 +124,17 @@ def make_yield_file(
         "yield_integral": float(np.sum(yields * widths)),
     }
 
+def parse_args():
+    p = argparse.ArgumentParser()
+
+    p.add_argument("--infile", required=True, help="input file")
+    p.add_argument("--label", required=True, help="Physical-model directory below SG_alpha_<alpha>")
+
+    return p.parse_args()
+
+def main():
+    args = parse_args()
+    make_yield_file(LABEL=args.label, input_file=Path(args.infile))
 
 if __name__ == "__main__":
-    print(make_yield_file())
+    main()

@@ -1026,13 +1026,13 @@ def cluster_sampling(MBH, alpha, spin, le, DT, BIMF, RD, disk, T, gamma, i, save
 
     if RD=='Bartko':
         R_min = R_in(Mbh, np.mean(cluster) * MSun, T)
-        print(f'R_clust: {R_min/R_g} Rg, {R_min/pc} pc')
+        print(f'R_clust: {R_min/R_g} Rg, {Rmax/pc} pc')
         a=powerlaw.Power_Law(alpha=gamma+2, xmin=R_min, xmax=Rmax)
             # print(np.max(a.rvs(len(iorio_bhs))))
         R=a.generate_random(len(cluster))
     if RD=='PY':
         R_min = 6*R_g
-        print(f'R_clust: {R_min/R_g} Rg, {R_min/pc} pc')
+        print(f'R_clust: {R_min/R_g} Rg, {Rmax/pc} pc')
         a=powerlaw.Power_Law(alpha=gamma+2, xmin=R_min, xmax=Rmax)
             # print(np.max(a.rvs(len(iorio_bhs))))
         R=a.generate_random(len(cluster))
