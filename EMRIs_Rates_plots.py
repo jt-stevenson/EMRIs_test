@@ -1,8 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
 import pandas as pd
-import seaborn as sb
 
 import binary_formation_distribution_V12 as myscript
 import NT_disk_Eqns_V1 as jscript
@@ -99,91 +97,158 @@ params=pd.DataFrame.from_dict(params)
 
 groups=params.groupby(['TT', 'BIMF', 'RD', 'wind', 'T_disc/Myr'], as_index=True) 
 
-torques=True
-mass_func=True
-radial_dist=True
+legend_rd = [Line2D([0], [0], marker='o', color='k', label='WeakPowerLaw',linestyle='None', fillstyle='full', markersize=10), 
+                Line2D([0], [0], marker='o', color='k', label='StrongPowerLaw',linestyle='None', fillstyle='none', markersize=10),
+                Line2D([0], [0], marker='o', color='k', label='Segmented',linestyle='None', fillstyle='right', markersize=10)]
+
+legend_TT =[Line2D([0], [0], marker='o', color='firebrick', label='Isothermal (P10)',linestyle='None', markersize=10),
+            Line2D([0], [0], marker='o', color='olivedrab', label='+3DThermal (G24)',linestyle='None', markersize=10)]
+
+legend_bimf = [Line2D([0], [0], marker='o', color='k', label='TopHeavy',linestyle='None', markersize=10),
+            Line2D([0], [0], marker='p', color='k', label='ProgeniterGen',linestyle='None', markersize=10),
+            Line2D([0], [0], marker='D', color='k', label='PopSynth',linestyle='None', markersize=10)]
+
+fig, ax = plt.subplots(3, 1, figsize=(6, 12), dpi=300, sharex=True)
+
+fig.subplots_adjust(hspace=0)
+fig.subplots_adjust(wspace=0.25)
+fig.subplots_adjust(top=0.93)
+
+for i in range(0, len(params)):
+    try:
+        Mbh=params['MBH/Msun'][i]
+        wind=params['wind'][i]
+        Tdisk=params['T_disc/Myr'][i]
+        TT=params['TT'][i]
+        BIMF=params['BIMF'][i]
+        RD=params['RD'][i]
+        N_emri=params['N_EMRI'][i]
+
+        if Tdisk==10.0 and wind=='On':
+            Tdisk=params['T_disc/Myr'][i] * 1e6
+            G_emri=N_emri*(1e9/Tdisk)
+
+            if TT=='P10':
+                color='firebrick'
+            elif TT=='G23':
+                color='olivedrab'
+
+            if BIMF=='PY':
+                marker='o'
+            if BIMF=='Tagawa':
+                marker='p'
+            if BIMF=='Vaccaro':
+                marker='D'
+
+            if RD=='PY':
+                fillstyle='full'
+            if RD=='Bartko':
+                fillstyle='none'
+            if RD=='Rom':
+                fillstyle='right'
+
+            if BIMF=='Vaccaro':
+                if RD=='Rom':
+                    if TT=='P10':
+                        ax[0].plot(Mbh, G_emri, marker=marker, color=color, markersize=8,  fillstyle=fillstyle, alpha=0.8, markeredgewidth=1.5)
+                        
+                    elif TT=='G23':
+                        ax[0].plot(Mbh, G_emri, marker=marker, color=color, markersize=8,  fillstyle=fillstyle, alpha=0.8, markeredgewidth=1.5)
+                        
+                    
+            if TT=='G23':
+                if RD=='Rom':
+                    if BIMF=='PY':
+                            ax[1].plot(Mbh, G_emri, marker=marker, color=color, markersize=8,  fillstyle=fillstyle, alpha=0.8, markeredgewidth=1.5)
+                            
+                    if BIMF=='Tagawa':
+                            ax[1].plot(Mbh, G_emri, marker=marker, color=color, markersize=10,  fillstyle=fillstyle, alpha=0.8, markeredgewidth=1.5)
+                            
+                    if BIMF=='Vaccaro':
+                            ax[1].plot(Mbh, G_emri, marker=marker, color=color, markersize=8,  fillstyle=fillstyle, alpha=0.8, markeredgewidth=1.5)
+                            
+                    
+            if TT=='G23':
+                if BIMF=='Vaccaro':
+                    if RD=='PY':
+                        ax[2].plot(Mbh, G_emri, marker=marker, color=color, markersize=8,  fillstyle=fillstyle, alpha=0.8, markeredgewidth=1.5)
+                                    
+                    if RD=='Bartko':
+                        ax[2].plot(Mbh, G_emri, marker=marker, color=color, markersize=8,  fillstyle=fillstyle, alpha=0.8, markeredgewidth=1.5)
+                                    
+                    if RD=='Rom':
+                        ax[2].plot(Mbh, G_emri, marker=marker, color=color, markersize=8,  fillstyle=fillstyle, alpha=0.8, markeredgewidth=1.5)
+                                    
+                    
+    except KeyError:
+        pass
+
+Mbh_PY=[1e5, 4e5, 1e6, 4e6, 1e7]
+Rates_PY=[4.2e3, 1.7e5, 4.5e5, 2.4e5, 1.3e5]
+
+for axes in ax:
+    axes.plot(Mbh_PY, Rates_PY, marker='.', color='black', markersize=10, linestyle='None')
+    axes.set_xscale('log')
+    axes.set_yscale('log')
+    # ax.set_xlim(9e4, 2e7)
+
+
+ax[1].set_ylabel('$N_{EMRI}/Gyr$')
+
+ax[0].set_ylim(1e3, 2e6)
+ax[1].set_ylim(1e3, 2e6)
+ax[2].set_ylim(1e2, 2e6)
+
+ax[2].set_xlabel('SMBH $[M_{\odot}]$')
+
+ax[0].legend(title='  TT', handles=legend_TT, loc='upper left', alignment='left')
+
+ax[1].legend(title='  BIMF', handles=legend_bimf, loc='upper left', alignment='left')
+
+ax[2].legend(title='  RD', handles=legend_rd, loc='upper left', alignment='left')
+
+plt.savefig(f'/Users/pmxks13/PhD/EMRIs_test/EMRI_Rates/rates_updated_sep.png', dpi=300, bbox_inches = "tight")
 
 fig, ax = plt.subplots()
 
-for group in groups:
-    for i in range(0, len(params)):
-        try:
-            wind=group[1]['wind'][i]
-            Tdisk=group[1]['T_disc/Myr'][i]
-            TT=group[1]['TT'][i]
-            Mbh=group[1]['MBH/Msun'][i]
-            if Tdisk==10.0 and wind=='On':
-                BIMF=group[1]['BIMF'][i]
-                RD=group[1]['RD'][i]
-                DT=group[1]['DT'][i]
-                alpha=group[1]['alpha'][i]
-                le=group[1]['le'][i]
-                N_emri=group[1]['N_EMRI'][i]
-                Tdisk=group[1]['T_disc/Myr'][i] * 1e6
-                G_emri=N_emri*(1e9/Tdisk)
-                # print(f'\nTT: {TT}, BIMF: {BIMF}, RD: {RD}, wind: {wind}')
-                # print(f'Tdisk {Tdisk/1e6:.1f} Myr, {G_emri:.1e} NEmri/Gyr')
-                if TT=='P10':
-                    color='firebrick'
-                elif TT=='B16':
-                    continue
-                elif TT=='G23':
-                    color='gold'
+for i in range(0, len(params)):
+    try:
+        wind=params['wind'][i]
+        Tdisk=params['T_disc/Myr'][i]
+        TT=params['TT'][i]
+        Mbh=params['MBH/Msun'][i]
+        if Tdisk==10.0 and wind=='On':
+            BIMF=params['BIMF'][i]
+            RD=params['RD'][i]
 
-                if BIMF=='PY':
-                    marker='o'
-                if BIMF=='Bartos':
-                    continue
-                if BIMF=='Tagawa':
-                    marker='*'
-                if BIMF=='Vaccaro':
-                    marker='D'
+            N_emri=params['N_EMRI'][i]
+            Tdisk=params['T_disc/Myr'][i] * 1e6
+            G_emri=N_emri*(1e9/Tdisk)
+            markersize=8
 
-                if RD=='PY':
-                    fillstyle='full'
-                if RD=='Bartko':
-                    fillstyle='none'
-                if RD=='Rom':
-                    fillstyle='right'
+            if TT=='P10':
+                color='firebrick'
+            elif TT=='G23':
+                color='olivedrab'
 
-                # if DT  == "SG":
-                #     disk = pagn.SirkoAGN(Mbh=Mbh*jscript.MSun , alpha=alpha, le=le)
-                #     disk.solve_disk()
-                
-                # Rmax=disk.Rmax
+            if BIMF=='PY':
+                marker='o'
+            if BIMF=='Tagawa':
+                marker='p'
+                markersize=10
+            if BIMF=='Vaccaro':
+                marker='D'
 
-                # m=10
-                # Rsch=2 * ct.G * Mbh*jscript.MSun / ct.c**2
+            if RD=='PY':
+                fillstyle='full'
+            if RD=='Bartko':
+                fillstyle='none'
+            if RD=='Rom':
+                fillstyle='right'
 
-                # mean_Gamma=myscript.compute_torque(disk, m*jscript.MSun , Mbh*jscript.MSun, TT, wind) 
-
-                # # traps = myscript.mig_trap(disk, mean_Gamma) 
-                # # innermost_trap = traps[0] if len(traps) > 0 else Rmax
-                
-                # antitraps = myscript.anti_trap(disk, mean_Gamma) 
-                # innermost_antitrap = antitraps[0] if len(antitraps) > 0 else Rmax
-
-                # print(f'\n**Mbh: {Mbh:1e} MSun**')
-                # print(f'**Rmax: {Rmax/jscript.pc:1e} pc**')
-                # print(f'**innermost antitrap: {innermost_antitrap/jscript.pc:1e} pc**\n')
-                
-                ax.plot(Mbh, G_emri, marker=marker, color=color, markersize=8,  fillstyle=fillstyle, alpha=0.5, markeredgewidth=1.5)
-        except KeyError:
-            pass
-
-legend_rd = [Line2D([0], [0], marker='o', color='k', label='WeakPowerLaw',linestyle='None', fillstyle='full'), 
-                Line2D([0], [0], marker='o', color='k', label='StrongPowerLaw',linestyle='None', fillstyle='none'),
-                Line2D([0], [0], marker='o', color='k', label='Segmented',linestyle='None', fillstyle='right')]
-
-legend_TT =[Line2D([0], [0], marker='o', color='firebrick', label='Isothermal (P10)',linestyle='None'),
-        #    Line2D([0], [0], marker='o', color='darkorange', label='B16',linestyle='None'),
-            Line2D([0], [0], marker='o', color='gold', label='+3DThermal (G24)',linestyle='None')]
-
-legend_bimf = [Line2D([0], [0], marker='o', color='k', label='TopHeavy',linestyle='None'),
-                #    Line2D([0], [0], marker='p', color='k', label='Bartos',linestyle='None'),
-            Line2D([0], [0], marker='*', color='k', label='ProgeniterGen',linestyle='None'),
-            Line2D([0], [0], marker='D', color='k', label='PopSynth',linestyle='None')]
-
+            ax.plot(Mbh, G_emri, marker=marker, color=color, markersize=markersize,  fillstyle=fillstyle, alpha=0.5, markeredgewidth=1.5)
+    except KeyError:
+        pass
 
 Mbh_PY=[1e5, 4e5, 1e6, 4e6, 1e7]
 Rates_PY=[4.2e3, 1.7e5, 4.5e5, 2.4e5, 1.3e5]
