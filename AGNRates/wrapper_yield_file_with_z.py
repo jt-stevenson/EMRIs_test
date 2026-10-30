@@ -4,17 +4,17 @@ from make_yield_file_with_z import make_yield_file
 import numpy as np
 
 zform_min=0.05
-zform_max=4.85
+zform_max=2.85
 zform_step=0.05
 
-SNR_lim=30
+SNR_lim=20
 
 zforms = np.round(np.arange(zform_min, zform_max + 0.5 * zform_step, zform_step), 6, )
 
 for BIMF in ["Vaccaro"]: #, "Bartos", "PY", "Tagawa", "Vaccaro"
     for RD in ["Rom"]: #, "Bartko", "Rom", "PY"
         for le in ["0.01"]:
-            for Mbh in ['1.0e+04', '1.0e+05', '4.0e+05', '1.0e+06', '4.0e+06', '1.0e+07']: #'1.0e+04', '1.0e+05', '4.0e+05', '1.0e+06', '4.0e+06', '1.0e+07'
+            for Mbh in ['1.0e+06', '4.0e+06', '1.0e+07']: #'1.0e+04', '1.0e+05', '4.0e+05', '1.0e+06', '4.0e+06', '1.0e+07'
                 for disk in ["SG"]: #, "NT"]:
                     for alpha in ["0.1"]: #, "0.01"]:
                         for spin in ["0.9"]: #, "0.99"]:

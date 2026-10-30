@@ -460,7 +460,6 @@ def compute_torque(disk, M, Mbh, TT, wind):
 
     if wind=='On' or "Partial":
         Gamma_wind = gamma_wind(M, disk, 5/3, wind)
-
     else:
         Gamma_wind = 0
 

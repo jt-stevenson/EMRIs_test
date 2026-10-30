@@ -17,10 +17,9 @@ from scipy.interpolate import CubicSpline
 
 from astropy.cosmology import Planck18 as COSMO
 
-MERGER_FLAG = 7
 DELAY_COLUMN = "t_inspiral/Myr"
 FLAG_COLUMN = "total_flags"
-SNR_COLUMN= "SNRs"
+SNR_COLUMN = "SNRs"
 BIN_EDGES_GYR = np.logspace(-9, -1, 80)
 
 td_gen = GenerateEMRIWaveform(
@@ -31,18 +30,7 @@ td_gen = GenerateEMRIWaveform(
 
 #from lsperi notebooks
 warnings.filterwarnings("ignore")
-EPS = 1e-2
 MODES = [(ll, mm, nn) for ll in range(2, 5) for mm in range(1, ll + 1) for nn in range(-1, 3)]
-
-DEFAULT_ANGLES = {
-    "qS": np.pi / 3,
-    "phiS": np.pi / 3,
-    "qK": np.pi / 3,
-    "phiK": np.pi / 3,
-    "Phi_phi0": np.pi / 3,
-    "Phi_theta0": 0.0,
-    "Phi_r0": np.pi / 3,
-}
 
 global FEW_GEN, TRAJ, RHS
 
@@ -165,15 +153,20 @@ def compute_snr(
     Phi_r0=None,
     psd="LISA_FEW",
     num_freq=5000,
+    seed='none'
 ):
+    if seed=='none':
+        rng = np.random.default_rng()
+    else:
+        rng = np.random.default_rng(seed)
 
-    qS = DEFAULT_ANGLES["qS"] if qS is None else qS
-    phiS = DEFAULT_ANGLES["phiS"] if phiS is None else phiS
-    qK = DEFAULT_ANGLES["qK"] if qK is None else qK
-    phiK = DEFAULT_ANGLES["phiK"] if phiK is None else phiK
-    Phi_phi0 = DEFAULT_ANGLES["Phi_phi0"] if Phi_phi0 is None else Phi_phi0
-    Phi_theta0 = DEFAULT_ANGLES["Phi_theta0"] if Phi_theta0 is None else Phi_theta0
-    Phi_r0 = DEFAULT_ANGLES["Phi_r0"] if Phi_r0 is None else Phi_r0
+    qS = np.arccos(rng.uniform(-1.0, 1.0))
+    phiS = rng.uniform(0.0, 2.0 * np.pi)
+    qK = np.arccos(rng.uniform(-1.0, 1.0))
+    phiK = rng.uniform(0.0, 2.0 * np.pi)
+    Phi_phi0 = rng.uniform(0.0, 2.0 * np.pi)
+    Phi_theta0 = rng.uniform(0.0, 2.0 * np.pi)
+    Phi_r0 = rng.uniform(0.0, 2.0 * np.pi)
 
     dist = redshift_to_luminosity_distance(z)
     try:
@@ -235,23 +228,14 @@ def make_yield_file(LABEL, input_file, z, SNR_lim,):
         events = pd.read_csv(file, sep=r"\s+", engine="python")
 
     N_SAMPLE=params['N']
-    N_BH=params['N']
     M=params['M_SMBH']
     alpha=params['alpha']
-
-    ef=0
-    Tobs = 4  # observation time (years), if the inspiral is shorter, the it will be zero padded
-    dt = 5.0    # time interval (seconds)
-    mode_selection_threshold = 1e-4  # relative threshold for mode inclusion: only modes making a relative contribution to
-                # the total power above this threshold will be included in the waveform.
-    x0 = 1.0 #initial cos(inclination) - fine to assume as 1 due to short timescale of alignment compared to inspiral
-    e0 = 0  # eccentricity - assumed circular in runs anyway
 
     SNRs=[]
 
     for i in range(0, len(events)):
         m2=events['m1/Msun,'][i]
-        snr=compute_snr(M, m2, 0.9, Tobs, ef, z, dt, psd='LISA_FEW')
+        snr=compute_snr(M, m2, 0.9, 4, 0, z, 5.0, psd='LISA_FEW')
         SNRs.append(snr)
 
     events[SNR_COLUMN] = SNRs
@@ -264,11 +248,11 @@ def make_yield_file(LABEL, input_file, z, SNR_lim,):
     if N_SAMPLE <= 0:
         raise ValueError("N_SAMPLE must be positive")
 
-    is_merger = events[columns[FLAG_COLUMN]] == MERGER_FLAG
+    is_merger = events[columns[FLAG_COLUMN]] == 7
     is_detectable = events[columns[SNR_COLUMN]] >= SNR_lim
     is_detectable_merger = is_merger & is_detectable
 
-    print(events.loc[is_detectable_merger])
+    # print(events.loc[is_detectable_merger])
 
     delays_gyr = (
             pd.to_numeric(events.loc[is_detectable_merger, columns[DELAY_COLUMN]], errors="coerce")
@@ -309,13 +293,13 @@ def make_yield_file(LABEL, input_file, z, SNR_lim,):
     summary_file = Path(f'/Users/pmxks13/PhD/EMRIs_test/AGNRates/yields_files/Z0.02/SG_alpha_{alpha}/SNRs_{SNR_lim}/{LABEL}/M_{M:.1e}_fEdd_0.01/summary_yields.txt')
     if summary_file.exists():
         file = open(summary_file, "a")
-        file.write(f'{z} {LABEL} {N_BH} {int(is_merger.sum())} {int(is_detectable_merger.sum())} {float(np.sum(yields * widths))}\n')
+        file.write(f'{z} {LABEL} {N_SAMPLE} {int(is_merger.sum())} {int(is_detectable_merger.sum())} {float(np.sum(yields * widths))}\n')
         file.close()
     else:
         pd.DataFrame(
                 {"z":[z] , 
                 "label": [LABEL], 
-                "N_BH": [N_BH], 
+                "N_BH": [N_SAMPLE], 
                 'Nmerg': [int(is_merger.sum())], 
                 "Ndetect": [int(is_detectable_merger.sum())], 
                 "yield_integral": [float(np.sum(yields * widths))]}
@@ -328,9 +312,8 @@ def make_yield_file(LABEL, input_file, z, SNR_lim,):
         "file": str(output_file),
         "summary_file": str(f'/Users/pmxks13/PhD/EMRIs_test/AGNRates/yields_files/Z0.02/SG_alpha_{alpha}/SNRs_{SNR_lim}/{LABEL}/M_{M:.1e}_fEdd_0.01/summary_yields.txt'),
         "label": LABEL,
-        "Nsample": N_SAMPLE,
         "Nmerg": int(is_detectable_merger.sum()),
-        "N_BH": N_BH,
+        "N_BH": N_SAMPLE,
         "yield_integral": float(np.sum(yields * widths)),
     }
 

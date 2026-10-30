@@ -22,7 +22,7 @@ warnings.filterwarnings('ignore')
 
 printing=True
 plotting=True
-type_II_computation = "conservative" 
+type_II_computation = "modified_type_I" 
 Fixed=True
 
 import binary_formation_distribution_V12 as myscript #edited to explicitly take alpha instead of disc.alpha
@@ -180,7 +180,7 @@ def iteration(args, cluster_df, mass_prim_vk, r_pu_1g, disk, N):
     # if you open a gap
     # keep integrating with Type II torque
     if len(solution1.t_events[1])>0:
-        # print("SBH does type II")
+        print("SBH does type II")
         gap[0]='type_II'
         t_gap = solution1.t_events[1][0]
         r_gap = solution1.y_events[1][0][0]
@@ -433,11 +433,11 @@ if __name__ == '__main__':
 
         print('printing to file...')
 
-        dir_name = f"/Users/pmxks13/PhD/EMRIs_test/EMRI_Rates/"
+        dir_name = f"/Users/pmxks13/PhD/EMRIs_test/EMRI_Rates_Final/"
         subdir_name=dir_name+f'{args.BIMF}/{args.RD}/le_{args.le}/Mbh_{args.Mbh:.1e}/{args.DT}/alpha_{args.a}/spin_{args.spin}/Tdisk_{args.T/(1e6)}/wind_{args.wind}/'
         if not os.path.exists(subdir_name):
             os.makedirs(subdir_name)
-        file_name = subdir_name+f"EMRIs_{args.TT}_{args.gen}_5.txt"
+        file_name = subdir_name+f"EMRIs_{args.TT}_{args.gen}.txt"
         print(f'file name: {file_name}')
         file_name_1g = dir_name+f"EMRIs_{args.TT}_1g.txt"
         if args.gen=='Ng' and  not os.path.exists(file_name_1g):
@@ -535,7 +535,7 @@ if __name__ == '__main__':
         print('printing following to summary file...')
         print(f'MBH: {args.Mbh:.1e} MSun\nSpin: {args.spin}\nalpha: {args.a}\nle: {args.le}\nwind: {args.wind}\nTdisk: {args.T/1e6:.1f} Myrs\nDT: {args.DT}\nTT: {args.TT}\nBIMF: {args.BIMF}\nRD: {args.RD}\nN: {N}, N_emri: {N_emri}\n')
 
-        summary_file = dir_name+f"EMRI_Rates_Summary_5.txt"
+        summary_file = dir_name+f"EMRI_Rates_Summary_final.txt"
         file = open(summary_file, 'a')
         file.write(f'{args.Mbh:.1e} {args.spin} {args.a} {args.le} {args.wind} {args.T/1e6:.1f} {args.DT} {args.TT} {args.BIMF} {args.RD} {N} {N_emri}\n')
         file.close()
